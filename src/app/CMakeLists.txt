@@ -39,6 +39,7 @@ target_include_directories(${TARGET} PUBLIC
 	${DIR_THIRDPARTY}/imgui
 	${DIR_THIRDPARTY}/imgui/backends
 	${DIR_THIRDPARTY}/imgui/misc/cpp
+	${DIR_THIRDPARTY}/IconFontCppHeaders
 )
 
 # ==================================================================================================

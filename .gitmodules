@@ -2,3 +2,6 @@
 	path = 3rdparty/imgui
 	url = https://github.com/Trider12/imgui
 	branch = features/tab_item_width
+[submodule "3rdparty/IconFontCppHeaders"]
+	path = 3rdparty/IconFontCppHeaders
+	url = https://github.com/juliettef/IconFontCppHeaders
