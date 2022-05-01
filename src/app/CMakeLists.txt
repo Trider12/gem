@@ -35,7 +35,6 @@ set_target_properties(${TARGET} PROPERTIES
 
 target_include_directories(${TARGET} PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/include
-	${DIR_THIRDPARTY}/SDL/include
 	${DIR_THIRDPARTY}/imgui
 	${DIR_THIRDPARTY}/imgui/backends
 	${DIR_THIRDPARTY}/imgui/misc/cpp
@@ -46,22 +45,28 @@ target_include_directories(${TARGET} PUBLIC
 # Libraries
 # ==================================================================================================
 
+find_package(OpenGL REQUIRED)
+
 if (WIN32)
 	target_link_directories(${TARGET} PRIVATE
 		${DIR_THIRDPARTY}/SDL/lib/${PLATFORM}/${ARCH}
 	)
+	include_directories(${DIR_THIRDPARTY}/SDL/include)
+	target_link_libraries(${TARGET} PRIVATE
+		SDL2
+		SDL2main
+		SDL2test
+		${OPENGL_LIBRARIES}
+	)
 elseif (LINUX)
-	# TODO
+	find_package(SDL2 REQUIRED)
+	include_directories(${SDL2_INCLUDE_DIRS})
+	target_link_libraries(${TARGET} PRIVATE
+		${SDL2_LIBRARIES}
+		${OPENGL_LIBRARIES}
+		${CMAKE_DL_LIBS}
+	)
 endif()
-
-find_package(OpenGL REQUIRED)
-
-target_link_libraries(${TARGET} PRIVATE
-	SDL2
-	SDL2main
-	SDL2test
-	${OPENGL_gl_LIBRARY}
-)
 
 # ==================================================================================================
 # Custom commands

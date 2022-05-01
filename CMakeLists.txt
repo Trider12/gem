@@ -48,8 +48,9 @@ if (WIN32)
             /WX
             /external:I ${DIR_THIRDPARTY}
             /external:W0
-            "$<$<NOT:$<CONFIG:DEBUG>>:/O2>"
+            $<$<NOT:$<CONFIG:DEBUG>>:/O2>
         )
+        add_link_options($<$<NOT:$<CONFIG:DEBUG>>:/SUBSYSTEM:WINDOWS>)
     endif()
 elseif(LINUX)
 	add_compile_options(
@@ -57,8 +58,8 @@ elseif(LINUX)
         -Werror
         -fstrict-aliasing
         -isystem ${DIR_THIRDPARTY}
-        "$<$<NOT:$<CONFIG:DEBUG>>:-O3>"
-        -stdlib=libc++
+        $<$<NOT:$<CONFIG:DEBUG>>:-O3>
+        $<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>
     )
     add_link_options(-stdlib=libc++)
 	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
