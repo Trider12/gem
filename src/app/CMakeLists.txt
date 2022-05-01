@@ -14,6 +14,9 @@ file(GLOB HEADERS
 file(GLOB SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${DIR_THIRDPARTY}/imgui/*.cpp
+	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_opengl3.cpp
+	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdl.cpp
+	${DIR_THIRDPARTY}/imgui/misc/cpp/imgui_stdlib.cpp
 )
 
 # ==================================================================================================
@@ -34,6 +37,8 @@ target_include_directories(${TARGET} PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${DIR_THIRDPARTY}/SDL/include
 	${DIR_THIRDPARTY}/imgui
+	${DIR_THIRDPARTY}/imgui/backends
+	${DIR_THIRDPARTY}/imgui/misc/cpp
 )
 
 # ==================================================================================================
