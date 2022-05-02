@@ -7,7 +7,7 @@
 #include <imgui_stdlib.h>
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_opengl3.h>
-#include <IconsFontAwesome5.h>
+#include <IconsFontAwesome4.h>
 
 #include <SDL.h>
 #include <SDL_opengl.h>
@@ -139,8 +139,9 @@ App::App(int width, int height)
 	icons_config.MergeMode = true;
 	icons_config.PixelSnapH = true;
 
-	assert(std::filesystem::exists("assets/fonts/fa-regular-400.ttf"));
-	io.Fonts->AddFontFromFileTTF("assets/fonts/fa-regular-400.ttf", fontSize, &icons_config, icons_ranges);
+	io.Fonts->AddFontFromFileTTF("assets/fonts/fontawesome-webfont.ttf", fontSize, &icons_config, icons_ranges);
+
+	io.IniFilename = nullptr;
 
 	setImguiStyles();
 
@@ -254,12 +255,12 @@ void App::drawMainWindow()
 			ImGui::SameLine();
 			ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
 			ImGui::SameLine();
-			ImGui::Button(ICON_FA_ARROW_CIRCLE_RIGHT, {40.f, 0.f});
+			ImGui::Button(ICON_FA_REPEAT, {40.f, 0.f});
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
 			ImGui::InputTextWithHint("", "Enter address", &tab.url);
 			ImGui::SameLine();
-			ImGui::Button(ICON_FA_USER_COG, {40.f, 0.f});
+			ImGui::Button(ICON_FA_COG, {40.f, 0.f});
 			ImGui::EndTabItem();
 		}
 
