@@ -33,7 +33,7 @@ set_target_properties(${TARGET} PROPERTIES
 # Includes
 # ==================================================================================================
 
-target_include_directories(${TARGET} PUBLIC
+target_include_directories(${TARGET} PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${DIR_THIRDPARTY}/imgui
 	${DIR_THIRDPARTY}/imgui/backends
@@ -51,7 +51,9 @@ if (WIN32)
 	target_link_directories(${TARGET} PRIVATE
 		${DIR_THIRDPARTY}/SDL/lib/${PLATFORM}/${ARCH}
 	)
-	include_directories(${DIR_THIRDPARTY}/SDL/include)
+	target_include_directories(${TARGET} PRIVATE
+		${DIR_THIRDPARTY}/SDL/include
+	)
 	target_link_libraries(${TARGET} PRIVATE
 		SDL2
 		SDL2main
@@ -60,7 +62,9 @@ if (WIN32)
 	)
 elseif (LINUX)
 	find_package(SDL2 REQUIRED)
-	include_directories(${SDL2_INCLUDE_DIRS})
+	target_include_directories(${TARGET} PRIVATE
+		${SDL2_INCLUDE_DIRS}
+	)
 	target_link_libraries(${TARGET} PRIVATE
 		${SDL2_LIBRARIES}
 		${OPENGL_LIBRARIES}
