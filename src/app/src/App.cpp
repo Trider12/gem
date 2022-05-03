@@ -83,12 +83,12 @@ void setImguiStyles()
 	style.IndentSpacing = 25;
 	style.ScrollbarSize = 15;
 	style.GrabMinSize = 10;
-	style.WindowBorderSize = 1;
+	style.WindowBorderSize = 0.f;
 	style.ChildBorderSize = 1;
 	style.PopupBorderSize = 1;
 	style.FrameBorderSize = 1;
 	style.TabBorderSize = 1;
-	style.WindowRounding = 7;
+	style.WindowRounding = 0.f;
 	style.ChildRounding = 4;
 	style.FrameRounding = 3;
 	style.PopupRounding = 4;
@@ -162,7 +162,7 @@ App::~App()
 
 namespace
 {
-	const ImVec4 clearColor = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	const ImVec4 clearColor = ImVec4();
 
 	constexpr ImGuiWindowFlags mainWindowFlags =
 		ImGuiWindowFlags_NoTitleBar |
@@ -174,7 +174,7 @@ namespace
 		ImGuiTabBarFlags_Reorderable |
 		ImGuiTabBarFlags_AutoSelectNewTabs |
 		ImGuiTabBarFlags_NoCloseWithMiddleMouseButton |
-		ImGuiTabBarFlags_FittingPolicyScroll;
+		ImGuiTabBarFlags_FittingPolicyResizeDown;
 
 	const Tab emptyTab {"New Tab", ""};
 
@@ -251,6 +251,7 @@ void App::drawMainWindow()
 		ImGui::SetNextItemWidth(200);
 		if (ImGui::BeginTabItem(tab.name.c_str(), &tab.isOpen, ImGuiTabItemFlags_NoPushId))
 		{
+			// Toolbar
 			ImGui::Button(ICON_FA_ARROW_LEFT, {40.f, 0.f});
 			ImGui::SameLine();
 			ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
@@ -261,6 +262,11 @@ void App::drawMainWindow()
 			ImGui::InputTextWithHint("", "Enter address", &tab.url);
 			ImGui::SameLine();
 			ImGui::Button(ICON_FA_COG, {40.f, 0.f});
+			ImGui::Separator();
+
+			// Page
+			ImGui::TextWrapped("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed quis malesuada magna. Aenean ornare massa at enim gravida, eu congue quam viverra. Etiam dui mauris, imperdiet sit amet felis tempus, interdum sollicitudin nunc. Suspendisse efficitur efficitur massa quis suscipit. Aliquam dignissim, massa aliquet dapibus fringilla, metus erat mollis mauris, iaculis semper metus nulla at mauris. Aenean ut accumsan purus. Morbi efficitur ligula at enim cursus pretium et quis ex.");
+
 			ImGui::EndTabItem();
 		}
 
