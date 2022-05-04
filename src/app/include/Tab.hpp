@@ -8,6 +8,7 @@ namespace gem
 	{
 		std::string name;
 		std::string url;
+		std::string content;
 
 		bool isOpen {true};
 	};

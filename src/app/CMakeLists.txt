@@ -39,6 +39,13 @@ target_include_directories(${TARGET} PRIVATE
 	${DIR_THIRDPARTY}/imgui/backends
 	${DIR_THIRDPARTY}/imgui/misc/cpp
 	${DIR_THIRDPARTY}/IconFontCppHeaders
+	${DIR_THIRDPARTY}/asio/asio/include
+)
+
+target_compile_definitions(${TARGET} PRIVATE 
+	ASIO_NO_DEPRECATED 
+	ASIO_NO_TS_EXECUTORS
+	_WIN32_WINNT=0x0601
 )
 
 # ==================================================================================================
@@ -46,6 +53,13 @@ target_include_directories(${TARGET} PRIVATE
 # ==================================================================================================
 
 find_package(OpenGL REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+target_link_libraries(${TARGET} PRIVATE
+	${OPENGL_LIBRARIES}
+	OpenSSL::SSL
+	OpenSSL::Crypto
+)
 
 if (WIN32)
 	target_link_directories(${TARGET} PRIVATE
@@ -58,7 +72,6 @@ if (WIN32)
 		SDL2
 		SDL2main
 		SDL2test
-		${OPENGL_LIBRARIES}
 	)
 elseif (LINUX)
 	find_package(SDL2 REQUIRED)
@@ -67,7 +80,6 @@ elseif (LINUX)
 	)
 	target_link_libraries(${TARGET} PRIVATE
 		${SDL2_LIBRARIES}
-		${OPENGL_LIBRARIES}
 		${CMAKE_DL_LIBS}
 	)
 endif()

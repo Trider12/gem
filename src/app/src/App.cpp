@@ -1,4 +1,5 @@
 #include "App.hpp"
+#include "GeminiClient.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -160,10 +161,41 @@ App::~App()
 	SDL_Quit();
 }
 
-namespace
+void App::update()
 {
+	for (SDL_Event event; SDL_PollEvent(&event);)
+	{
+		ImGui_ImplSDL2_ProcessEvent(&event);
+
+		if (event.type == SDL_QUIT ||
+			(event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(_window)))
+		{
+			_isDone = true;
+		}
+	}
+
+	GeminiClient::poll();
+
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+	ImGui::NewFrame();
+
+	drawMainWindow();
+	//ImGui::ShowDemoWindow();
+
 	const ImVec4 clearColor = ImVec4();
 
+	ImGui::Render();
+	ImGuiIO &io = ImGui::GetIO();
+	glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+	glClearColor(clearColor.x * clearColor.w, clearColor.y * clearColor.w, clearColor.z * clearColor.w, clearColor.w);
+	glClear(GL_COLOR_BUFFER_BIT);
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	SDL_GL_SwapWindow(_window);
+}
+
+namespace
+{
 	constexpr ImGuiWindowFlags mainWindowFlags =
 		ImGuiWindowFlags_NoTitleBar |
 		ImGuiWindowFlags_NoResize |
@@ -179,37 +211,19 @@ namespace
 	const Tab emptyTab {"New Tab", ""};
 
 	static bool isFirstOpening = true;
-}
 
-void App::update()
-{
-	for (SDL_Event event; SDL_PollEvent(&event);)
+	static void loadTab(Tab &tab)
 	{
-		ImGui_ImplSDL2_ProcessEvent(&event);
-
-		if (event.type == SDL_QUIT ||
-			(event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(_window)))
-		{
-			_isDone = true;
-		}
+		GeminiClient().connectAsync(tab.url, 1965,
+			[&tab](bool success, std::string_view, std::string_view body)
+			{
+				if (success)
+				{
+					tab.content = body;
+				}
+			}
+		);
 	}
-
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL2_NewFrame();
-	ImGui::NewFrame();
-
-	drawMainWindow();
-
-	//ImGui::ShowDemoWindow();
-	//ImGui::ShowStyleEditor();
-
-	ImGui::Render();
-	ImGuiIO &io = ImGui::GetIO();
-	glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-	glClearColor(clearColor.x * clearColor.w, clearColor.y * clearColor.w, clearColor.z * clearColor.w, clearColor.w);
-	glClear(GL_COLOR_BUFFER_BIT);
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	SDL_GL_SwapWindow(_window);
 }
 
 void App::drawMainWindow()
@@ -227,7 +241,12 @@ void App::drawMainWindow()
 	{
 		if (isFirstOpening)
 		{
-			_tabs.push_back(emptyTab);
+			Tab newTab = emptyTab;
+			newTab.url = "gemini.circumlunar.space";
+			_tabs.push_back(newTab);
+
+			loadTab(*_tabs.rbegin());
+
 			isFirstOpening = false;
 		}
 		else
@@ -256,7 +275,10 @@ void App::drawMainWindow()
 			ImGui::SameLine();
 			ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
 			ImGui::SameLine();
-			ImGui::Button(ICON_FA_REPEAT, {40.f, 0.f});
+			if (ImGui::Button(ICON_FA_REPEAT, {40.f, 0.f}))
+			{
+				loadTab(tab);
+			}
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
 			ImGui::InputTextWithHint("", "Enter address", &tab.url);
@@ -265,7 +287,11 @@ void App::drawMainWindow()
 			ImGui::Separator();
 
 			// Page
-			ImGui::TextWrapped("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed quis malesuada magna. Aenean ornare massa at enim gravida, eu congue quam viverra. Etiam dui mauris, imperdiet sit amet felis tempus, interdum sollicitudin nunc. Suspendisse efficitur efficitur massa quis suscipit. Aliquam dignissim, massa aliquet dapibus fringilla, metus erat mollis mauris, iaculis semper metus nulla at mauris. Aenean ut accumsan purus. Morbi efficitur ligula at enim cursus pretium et quis ex.");
+			ImGui::BeginGroup();
+			ImGui::BeginChild(1);
+			ImGui::TextWrapped("%s", tab.content.c_str());
+			ImGui::EndChild();
+			ImGui::EndGroup();
 
 			ImGui::EndTabItem();
 		}
