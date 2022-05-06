@@ -11,8 +11,8 @@ def run(cmd):
 
 
 if os.name == 'nt':
-    run(["bootstrap-vcpkg.bat", "--disable-metrics"])
+    run("bootstrap-vcpkg.bat")
     run("vcpkg.exe install sdl2:x64-windows")
 else:
-    run(["./bootstrap-vcpkg.sh", "--disable-metrics"])
+    run("./bootstrap-vcpkg.sh")
     run("./vcpkg install sdl2")
