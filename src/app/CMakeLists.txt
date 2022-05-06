@@ -40,6 +40,7 @@ target_include_directories(${TARGET} PRIVATE
 	${DIR_THIRDPARTY}/imgui/misc/cpp
 	${DIR_THIRDPARTY}/IconFontCppHeaders
 	${DIR_THIRDPARTY}/asio/asio/include
+	${DIR_THIRDPARTY}/openssl/include
 )
 
 target_compile_definitions(${TARGET} PRIVATE 
@@ -52,44 +53,41 @@ target_compile_definitions(${TARGET} PRIVATE
 # Libraries
 # ==================================================================================================
 
-find_package(OpenGL REQUIRED)
-find_package(OpenSSL REQUIRED)
-
-target_link_libraries(${TARGET} PRIVATE
-	${OPENGL_LIBRARIES}
-	OpenSSL::SSL
-	OpenSSL::Crypto
-)
+add_library(SSL STATIC IMPORTED)
+add_library(Crypto STATIC IMPORTED)
 
 if (WIN32)
-	target_link_directories(${TARGET} PRIVATE
-		${DIR_THIRDPARTY}/SDL/lib/${PLATFORM}/${ARCH}
+	set_target_properties(SSL PROPERTIES 
+		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libssl.lib
 	)
-	target_include_directories(${TARGET} PRIVATE
-		${DIR_THIRDPARTY}/SDL/include
+	set_target_properties(Crypto PROPERTIES 
+		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libcrypto.lib
 	)
-	target_link_libraries(${TARGET} PRIVATE
-		SDL2
-		SDL2main
-		SDL2test
+	target_link_libraries(${TARGET} PRIVATE crypt32.lib)
+else()
+	set_target_properties(SSL PROPERTIES 
+		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libssl.a
 	)
-elseif (LINUX)
-	find_package(SDL2 REQUIRED)
-	target_include_directories(${TARGET} PRIVATE
-		${SDL2_INCLUDE_DIRS}
-	)
-	target_link_libraries(${TARGET} PRIVATE
-		${SDL2_LIBRARIES}
-		${CMAKE_DL_LIBS}
+	set_target_properties(Crypto PROPERTIES 
+		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libcrypto.a
 	)
 endif()
+
+find_package(OpenGL REQUIRED)
+find_package(SDL2 REQUIRED)
+
+target_include_directories(${TARGET} PRIVATE
+	${SDL2_INCLUDE_DIRS}
+)
+
+target_link_libraries(${TARGET} PRIVATE
+	SSL
+	Crypto
+	${OPENGL_LIBRARIES}
+	${SDL2_LIBRARIES}
+	${CMAKE_DL_LIBS}
+)
 
 # ==================================================================================================
 # Custom commands
 # ==================================================================================================
-
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-	file(COPY ${DIR_THIRDPARTY}/SDL/bin/${PLATFORM}/${ARCH}/ DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Debug)
-else()
-	file(COPY ${DIR_THIRDPARTY}/SDL/bin/${PLATFORM}/${ARCH}/ DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Release)
-endif()
