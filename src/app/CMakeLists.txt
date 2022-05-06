@@ -91,3 +91,9 @@ target_link_libraries(${TARGET} PRIVATE
 # ==================================================================================================
 # Custom commands
 # ==================================================================================================
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+	file(COPY ${DIR_ASSETS} DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Debug)
+else()
+	file(COPY ${DIR_ASSETS} DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Release)
+endif()

@@ -9,6 +9,7 @@ project(${TARGET})
 
 set(DIR_THIRDPARTY ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 set(DIR_EXPORT     ${CMAKE_CURRENT_SOURCE_DIR}/build)
+set(DIR_ASSETS     ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 
 # ==================================================================================================
 # OS specific
