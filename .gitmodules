@@ -8,3 +8,6 @@
 [submodule "3rdparty/asio"]
 	path = 3rdparty/asio
 	url = https://github.com/chriskohlhoff/asio
+[submodule "tools/vcpkg"]
+	path = tools/vcpkg
+	url = https://github.com/microsoft/vcpkg
