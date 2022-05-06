@@ -1,4 +1,5 @@
 #include "GeminiClient.hpp"
+#include "Utilities.hpp"
 
 #include <asio/buffer.hpp>
 #include <asio/connect.hpp>
@@ -12,39 +13,23 @@ using namespace gem;
 
 namespace
 {
-	static inline bool checkErrorCode(const std::error_code &ec, std::string_view successMessage, std::string_view failMessage, bool eofIsError = true)
+	static inline std::string_view extractHostName(std::string_view url)
 	{
-		if (!ec || (!eofIsError && ec == asio::error::eof))
-		{
-			printf("%s\n", successMessage.data());
-			return true;
-		}
+		size_t p1 = url.find_first_of("//") + 2;
+		size_t p2 = url.find_first_of("/", p1);
 
-		const std::string message = ec.message();
-		fprintf(stderr, "%s: %s\n", failMessage.data(), message.c_str());
-
-		return false;
+		return url.substr(p1, p2 - p1);
 	}
 
-	static inline std::vector<std::string> splitString(const char *str, char delim = ' ')
+	using SocketPtr = std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>>;
+
+	static void receiveBodyAsync(SocketPtr socket, const std::string &code, const std::string &mime, const GeminiClient::CallbackType &callback)
 	{
-		std::istringstream iss(str);
-		std::vector<std::string> strings;
-
-		for (std::string string; std::getline(iss, string, delim); strings.push_back(string));
-
-		return strings;
-	}
-
-	using socketPtr = std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>>;
-
-	static void receiveBodyAsync(socketPtr socket, std::string_view mime, const GeminiClient::CallbackType &callback)
-	{
-		auto buffer = new asio::streambuf();
+		auto *buffer = new asio::streambuf();
 
 		// capture socket to prolong its life
 		asio::async_read(*socket, *buffer,
-			[socket, buffer, mime, callback](const std::error_code &ec, std::size_t size)
+			[socket, buffer, code, mime, callback](const std::error_code &ec, std::size_t size)
 			{
 				if (checkErrorCode(ec, "Receiving Body successful", "Receiving Body failed", false))
 				{
@@ -52,12 +37,12 @@ namespace
 
 					if (callback)
 					{
-						callback(true, mime, {body, size});
+						callback(true, code, mime, std::string(body, size));
 					}
 				}
 				else if (callback)
 				{
-					callback(false, mime, "");
+					callback(false, code, mime, "");
 				}
 
 				delete buffer;
@@ -65,51 +50,56 @@ namespace
 		);
 	}
 
-	static void parseHeader(socketPtr socket, const char *header, size_t headerSize, const GeminiClient::CallbackType &callback)
+	static void parseHeader(SocketPtr socket, const char *header, size_t headerSize, const GeminiClient::CallbackType &callback)
 	{
-		if (header == nullptr || headerSize <= 0)
+		const char *code = "";
+		const char *mime = "";
+
+		if (header != nullptr && headerSize > 0)
 		{
-			return;
+			std::vector<std::string> strings = stringSplit(header);
+			code = strings[0].c_str();
+
+			// TODO: return codes handling
+
+			switch (header[0])
+			{
+				case '1':
+					break;
+				case '2':
+				{
+					assert(strings.size() > 1);
+
+					mime = strings[1].c_str();
+
+					if (stringStartsWith(mime, "text/"))
+					{
+						receiveBodyAsync(socket, code, mime, callback);
+						return;
+					}
+
+					break;
+				}
+				case '3':
+					break;
+				case '4':
+					break;
+				case '5':
+					break;
+				case '6':
+					break;
+			}
 		}
 
-		// TODO: return codes handling
+		fprintf(stderr, "Malformed header :%s\n", header);
 
-		switch (header[0])
+		if (callback)
 		{
-			case '1':
-				break;
-			case '2':
-			{
-				std::vector<std::string> strings = splitString(header);
-				const std::string &mime = strings[1];
-
-				if (mime.rfind("text/", 0) == 0)
-				{
-					receiveBodyAsync(socket, mime, callback);
-				}
-				else if (callback)
-				{
-					callback(false, mime, "");
-				}
-
-				break;
-			}
-			case '3':
-				break;
-			case '4':
-				break;
-			case '5':
-				break;
-			case '6':
-				break;
-
-			default:
-				fprintf(stderr, "Malformed header :%s\n", header);
-				break;
+			callback(false, code, mime, "");
 		}
 	}
 
-	static void receiveHeaderAsync(socketPtr socket, const GeminiClient::CallbackType &callback)
+	static void receiveHeaderAsync(SocketPtr socket, const GeminiClient::CallbackType &callback)
 	{
 		auto *buffer = new asio::streambuf(2048);
 
@@ -123,7 +113,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "");
+					callback(false, "", "", "");
 				}
 
 				delete buffer;
@@ -131,11 +121,11 @@ namespace
 		);
 	}
 
-	static void sendRequestAsync(socketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
+	static void sendRequestAsync(SocketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
 	{
-		std::string request = "gemini://" + url + "/\r\n";
+		std::string request = url + "\r\n";
 
-		asio::async_write(*socket, asio::buffer(request.data(), request.size()),
+		asio::async_write(*socket, asio::buffer(request),
 			[socket, callback](const std::error_code &ec, std::size_t)
 			{
 				if (checkErrorCode(ec, "Write successful", "Write failed"))
@@ -144,13 +134,13 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "");
+					callback(false, "", "", "");
 				}
 			}
 		);
 	}
 
-	static void handshakeAsync(socketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
+	static void handshakeAsync(SocketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
 	{
 		socket->async_handshake(asio::ssl::stream_base::client,
 			[socket, url, callback](const std::error_code &ec)
@@ -161,13 +151,13 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "");
+					callback(false, "", "", "");
 				}
 			}
 		);
 	}
 
-	static void connectAsync(socketPtr socket, const std::string &url, const asio::ip::tcp::resolver::results_type &endpoints, const GeminiClient::CallbackType &callback)
+	static void connectAsync(SocketPtr socket, const std::string &url, const asio::ip::tcp::resolver::results_type &endpoints, const GeminiClient::CallbackType &callback)
 	{
 		asio::async_connect(socket->next_layer(), endpoints,
 			[socket, url, callback](const std::error_code &ec, const asio::ip::tcp::endpoint &)
@@ -178,17 +168,18 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "");
+					callback(false, "", "", "");
 				}
 			}
 		);
 	}
 
-	static void resolveAsync(asio::io_context &ioContext, socketPtr socket, const std::string &url, size_t port, const GeminiClient::CallbackType &callback)
+	static void resolveAsync(asio::io_context &ioContext, SocketPtr socket, const std::string &url, size_t port, const GeminiClient::CallbackType &callback)
 	{
 		asio::ip::tcp::resolver *resolver = new asio::ip::tcp::resolver(ioContext);
+		std::string_view hostName = extractHostName(url);
 
-		resolver->async_resolve(url, std::to_string(port),
+		resolver->async_resolve(hostName, std::to_string(port),
 			[socket, url, resolver, callback](const std::error_code &ec, const asio::ip::tcp::resolver::results_type &endpoints)
 			{
 				if (checkErrorCode(ec, "Resolve successful", "Resolve failed"))
@@ -197,7 +188,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "");
+					callback(false, "", "", "");
 				}
 
 				delete resolver;

@@ -1,5 +1,6 @@
 #include "App.hpp"
 #include "GeminiClient.hpp"
+#include "Utilities.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -129,9 +130,10 @@ App::App(int width, int height)
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
-	const float fontSize = 20.f;
-
 	ImGuiIO &io = ImGui::GetIO();
+	io.IniFilename = nullptr;
+
+	const float fontSize = 20.f;
 	//io.Fonts->AddFontDefault();
 	io.Fonts->AddFontFromFileTTF("assets/fonts/Cousine-Regular.ttf", fontSize);
 
@@ -141,8 +143,6 @@ App::App(int width, int height)
 	icons_config.PixelSnapH = true;
 
 	io.Fonts->AddFontFromFileTTF("assets/fonts/fontawesome-webfont.ttf", fontSize, &icons_config, icons_ranges);
-
-	io.IniFilename = nullptr;
 
 	setImguiStyles();
 
@@ -196,30 +196,29 @@ void App::update()
 
 namespace
 {
-	constexpr ImGuiWindowFlags mainWindowFlags =
-		ImGuiWindowFlags_NoTitleBar |
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoSavedSettings;
-
-	constexpr ImGuiTabBarFlags tabBarFlags =
-		ImGuiTabBarFlags_Reorderable |
-		ImGuiTabBarFlags_AutoSelectNewTabs |
-		ImGuiTabBarFlags_NoCloseWithMiddleMouseButton |
-		ImGuiTabBarFlags_FittingPolicyResizeDown;
-
-	const Tab emptyTab {"New Tab", ""};
+	const Tab emptyTab {"", "New Tab", ""};
 
 	static bool isFirstOpening = true;
 
 	static void loadTab(Tab &tab)
 	{
+		if (!gem::stringStartsWith(tab.url, "gemini://"))
+		{
+			tab.url = "gemini://" + tab.url;
+		}
+
 		GeminiClient().connectAsync(tab.url, 1965,
-			[&tab](bool success, std::string_view, std::string_view body)
+			[&tab](bool success, std::string code, std::string, std::string body)
 			{
 				if (success)
 				{
+					gem::stringTrim(body);
 					tab.content = body;
+					tab.label = body.substr(0, body.find('\n'));
+				}
+				else
+				{
+					tab.content = "Error " + code;
 				}
 			}
 		);
@@ -230,9 +229,21 @@ void App::drawMainWindow()
 {
 	ImGuiIO &io = ImGui::GetIO();
 
+	constexpr ImGuiWindowFlags mainWindowFlags =
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoSavedSettings;
+
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::SetNextWindowSize(io.DisplaySize);
 	ImGui::Begin("MainWindow", nullptr, mainWindowFlags);
+
+	constexpr ImGuiTabBarFlags tabBarFlags =
+		ImGuiTabBarFlags_Reorderable |
+		ImGuiTabBarFlags_AutoSelectNewTabs |
+		ImGuiTabBarFlags_NoCloseWithMiddleMouseButton |
+		ImGuiTabBarFlags_FittingPolicyResizeDown;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 10});
 	ImGui::BeginTabBar("MainTabBar", tabBarFlags);
@@ -241,12 +252,7 @@ void App::drawMainWindow()
 	{
 		if (isFirstOpening)
 		{
-			Tab newTab = emptyTab;
-			newTab.url = "gemini.circumlunar.space";
-			_tabs.push_back(newTab);
-
-			loadTab(*_tabs.rbegin());
-
+			_tabs.push_back(emptyTab);
 			isFirstOpening = false;
 		}
 		else
@@ -255,50 +261,51 @@ void App::drawMainWindow()
 		}
 	}
 
-	for (auto it = _tabs.begin(); it != _tabs.end();)
+	for (int i = 0; i < _tabs.size();)
 	{
-		if (!it->isOpen)
+		Tab &tab = _tabs[i];
+
+		if (!tab.isOpen)
 		{
-			it = _tabs.erase(it);
+			_tabs.erase(_tabs.begin() + i);
 			continue;
 		}
 
-		Tab &tab = *it;
-
-		ImGui::PushID(&tab);
-
+		ImGui::PushID(i);
 		ImGui::SetNextItemWidth(200);
-		if (ImGui::BeginTabItem(tab.name.c_str(), &tab.isOpen, ImGuiTabItemFlags_NoPushId))
+		if (ImGui::BeginTabItem(tab.label.c_str(), &tab.isOpen, ImGuiTabItemFlags_NoPushId))
 		{
 			// Toolbar
 			ImGui::Button(ICON_FA_ARROW_LEFT, {40.f, 0.f});
 			ImGui::SameLine();
 			ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
 			ImGui::SameLine();
+
 			if (ImGui::Button(ICON_FA_REPEAT, {40.f, 0.f}))
 			{
 				loadTab(tab);
 			}
 			ImGui::SameLine();
+
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
-			ImGui::InputTextWithHint("", "Enter address", &tab.url);
+			if (ImGui::InputTextWithHint("", "Enter address", &tab.url, ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				loadTab(tab);
+			}
 			ImGui::SameLine();
+
 			ImGui::Button(ICON_FA_COG, {40.f, 0.f});
-			ImGui::Separator();
 
 			// Page
-			ImGui::BeginGroup();
 			ImGui::BeginChild(1);
-			ImGui::TextWrapped("%s", tab.content.c_str());
+			ImGui::InputTextMultiline("##hidden", &tab.content, ImGui::GetContentRegionAvail(), ImGuiInputTextFlags_ReadOnly);
 			ImGui::EndChild();
-			ImGui::EndGroup();
 
 			ImGui::EndTabItem();
 		}
-
 		ImGui::PopID();
 
-		++it;
+		i++;
 	}
 
 	if (ImGui::TabItemButton(ICON_FA_PLUS, ImGuiTabItemFlags_Trailing))

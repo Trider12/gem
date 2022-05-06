@@ -6,8 +6,8 @@ namespace gem
 {
 	struct Tab
 	{
-		std::string name;
 		std::string url;
+		std::string label;
 		std::string content;
 
 		bool isOpen {true};

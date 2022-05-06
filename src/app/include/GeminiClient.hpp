@@ -11,7 +11,7 @@ namespace gem
 	class GeminiClient
 	{
 	public:
-		using CallbackType = std::function<void(bool success, std::string_view mime, std::string_view body)>;
+		using CallbackType = std::function<void(bool success, std::string code, std::string mime, std::string body)>;
 
 		void connectAsync(std::string url, size_t port = 1965, const CallbackType &callback = nullptr);
 
