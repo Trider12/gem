@@ -3,6 +3,7 @@
 #include "Tab.hpp"
 
 #include <vector>
+#include <memory>
 
 struct SDL_Window;
 
@@ -25,6 +26,6 @@ namespace gem
 
 		bool _isDone {false};
 
-		std::vector<Tab> _tabs;
+		std::vector<std::shared_ptr<Tab>> _tabs;
 	};
 }
