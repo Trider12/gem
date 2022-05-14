@@ -8,11 +8,11 @@
 
 namespace gem
 {
-	static inline bool checkErrorCode(const asio::error_code &ec, std::string_view successMessage = "", std::string_view failMessage = "", bool eofIsError = true)
+	static inline bool checkErrorCode(const asio::error_code &ec, [[maybe_unused]] std::string_view successMessage = "", std::string_view failMessage = "", bool eofIsError = true)
 	{
 		if (!ec || (!eofIsError && ec == asio::error::eof))
 		{
-			puts(successMessage.data());
+			//puts(successMessage.data());
 			return true;
 		}
 

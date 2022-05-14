@@ -19,7 +19,7 @@ namespace gem
 		void update();
 
 	private:
-		void drawMainWindow();
+		void render();
 
 		SDL_Window *_window {nullptr};
 		void *_glContext {nullptr};
