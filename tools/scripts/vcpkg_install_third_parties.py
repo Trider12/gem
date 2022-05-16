@@ -15,4 +15,7 @@ if os.name == 'nt':
     run("vcpkg.exe install --triplet x64-windows sdl2 freetype")
 else:
     run("./bootstrap-vcpkg.sh")
-    run("./vcpkg install sdl2 freetype")
+    if os.environ.get('DISPLAY'): # X11
+    	run("./vcpkg install sdl2 sdl2[x11] freetype")
+    else:
+    	run("./vcpkg install sdl2 freetype")

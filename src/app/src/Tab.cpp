@@ -231,6 +231,8 @@ void Tab::setData(std::shared_ptr<std::string> &dataPtr)
 					}
 					break;
 				}
+				default:
+					break;
 			}
 		}
 	}
