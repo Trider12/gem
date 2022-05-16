@@ -17,6 +17,7 @@ file(GLOB SOURCES
 	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_opengl3.cpp
 	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdl.cpp
 	${DIR_THIRDPARTY}/imgui/misc/cpp/imgui_stdlib.cpp
+	${DIR_THIRDPARTY}/imgui/misc/freetype/imgui_freetype.cpp
 )
 
 # ==================================================================================================
@@ -38,6 +39,7 @@ target_include_directories(${TARGET} PRIVATE
 	${DIR_THIRDPARTY}/imgui
 	${DIR_THIRDPARTY}/imgui/backends
 	${DIR_THIRDPARTY}/imgui/misc/cpp
+	${DIR_THIRDPARTY}/imgui/misc/freetype
 	${DIR_THIRDPARTY}/IconFontCppHeaders
 	${DIR_THIRDPARTY}/asio/asio/include
 	${DIR_THIRDPARTY}/openssl/include
@@ -47,6 +49,8 @@ target_compile_definitions(${TARGET} PRIVATE
 	ASIO_NO_DEPRECATED 
 	ASIO_NO_TS_EXECUTORS
 	_WIN32_WINNT=0x0601
+	IMGUI_ENABLE_FREETYPE
+	IMGUI_USE_WCHAR32
 )
 
 # ==================================================================================================
@@ -75,9 +79,11 @@ endif()
 
 find_package(OpenGL REQUIRED)
 find_package(SDL2 REQUIRED)
+find_package(Freetype REQUIRED)
 
 target_include_directories(${TARGET} PRIVATE
 	${SDL2_INCLUDE_DIRS}
+	${FREETYPE_INCLUDE_DIRS}
 )
 
 target_link_libraries(${TARGET} PRIVATE
@@ -85,6 +91,7 @@ target_link_libraries(${TARGET} PRIVATE
 	Crypto
 	${OPENGL_LIBRARIES}
 	${SDL2_LIBRARIES}
+	${FREETYPE_LIBRARIES}
 	${CMAKE_DL_LIBS}
 )
 

@@ -12,7 +12,7 @@ def run(cmd):
 
 if os.name == 'nt':
     run("bootstrap-vcpkg.bat")
-    run("vcpkg.exe install sdl2:x64-windows")
+    run("vcpkg.exe install --triplet x64-windows sdl2 freetype")
 else:
     run("./bootstrap-vcpkg.sh")
-    run("./vcpkg install sdl2")
+    run("./vcpkg install sdl2 freetype")

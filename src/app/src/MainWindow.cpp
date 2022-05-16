@@ -6,6 +6,7 @@
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <imgui_freetype.h>
 
 #include <IconsFontAwesome4.h>
 
@@ -13,7 +14,13 @@ using namespace gem;
 
 namespace
 {
-	static ImFont *fontDefault = nullptr, *fontH1 = nullptr, *fontH2 = nullptr, *fontH3 = nullptr;
+	static ImFont *fontDefault = nullptr,
+		*fontMono = nullptr,
+		*fontIcons = nullptr,
+		*fontH1 = nullptr,
+		*fontH2 = nullptr,
+		*fontH3 = nullptr;
+
 	int duplicatedTabIndex = -1;
 	std::unordered_set<int> tabsToRemoveIndices;
 
@@ -97,7 +104,9 @@ namespace
 		ImVec2 size = ImGui::CalcTextSize(textStart, textEnd);
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, blockBgColor);
 		ImGui::BeginChild(("Block" + std::to_string(index)).c_str(), {-10.f, size.y}, false, ImGuiWindowFlags_HorizontalScrollbar);
+		ImGui::PushFont(fontMono);
 		ImGui::TextUnformatted(textStart, textEnd);
+		ImGui::PopFont();
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
 	}
@@ -188,6 +197,8 @@ namespace
 
 	void drawToolbar(std::shared_ptr<Tab> tab, const gui::LoadLinkCallback &callback)
 	{
+		ImGui::PushFont(fontIcons);
+
 		ImGui::Button(ICON_FA_ARROW_LEFT, {40.f, 0.f});
 		ImGui::SameLine();
 		ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
@@ -202,6 +213,8 @@ namespace
 		}
 		ImGui::SameLine();
 
+		ImGui::PopFont();
+
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
 		if (ImGui::InputTextWithHint("", "Enter address", &tab->url, ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue))
 		{
@@ -212,7 +225,11 @@ namespace
 		}
 		ImGui::SameLine();
 
+		ImGui::PushFont(fontIcons);
+
 		ImGui::Button(ICON_FA_COG, {40.f, 0.f});
+
+		ImGui::PopFont();
 	}
 
 	void drawContextMenu(std::vector<std::shared_ptr<Tab>> &tabs, int index, const gui::LoadLinkCallback &callback)
@@ -321,10 +338,14 @@ void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const Loa
 		}
 	}
 
+	ImGui::PushFont(fontIcons);
+
 	if (ImGui::TabItemButton(ICON_FA_PLUS, ImGuiTabItemFlags_Trailing))
 	{
 		tabs.push_back(std::make_shared<Tab>(emptyTab));
 	}
+
+	ImGui::PopFont();
 
 	ImGui::EndTabBar();
 	ImGui::PopStyleVar();
@@ -335,36 +356,51 @@ void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const Loa
 
 void gem::gui::loadFonts()
 {
-	constexpr const char *fontPath = "assets/fonts/Cousine-Regular.ttf";
-	assert(std::filesystem::exists(fontPath));
-	std::ifstream ifs(fontPath, std::ios::binary | std::ios::ate);
+	constexpr const char *fontPathDefault = "assets/fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathMono = "assets/fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathEmoji = "assets/fonts/NotoEmoji-Regular.ttf";
+	constexpr const char *fontPathIcons = "assets/fonts/fontawesome-webfont.ttf";
+
+	constexpr float fontSizeH1 = 32.f;
+	constexpr float fontSizeH2 = 28.f;
+	constexpr float fontSizeH3 = 24.f;
+	constexpr float fontSizeDefault = 20.f;
+	constexpr float fontSizeMono = fontSizeDefault;
+
+	assert(std::filesystem::exists(fontPathDefault));
+	assert(std::filesystem::exists(fontPathMono));
+	assert(std::filesystem::exists(fontPathEmoji));
+	assert(std::filesystem::exists(fontPathIcons));
+
+	std::ifstream ifs(fontPathDefault, std::ios::binary | std::ios::ate);
 	int size = static_cast<int>(ifs.tellg());
 	char *fontData = new char[size];
 	ifs.seekg(0, std::ios::beg);
 	ifs.read(fontData, size);
 	ifs.close();
 
-	constexpr float fontSizeH1 = 28.f;
-	constexpr float fontSizeH2 = 24.f;
-	constexpr float fontSizeH3 = 20.f;
-	constexpr float fontSizeDefault = 16.f;
-
-	ImGuiIO &io = ImGui::GetIO();
-	ImFontConfig fontConfig;
+	static const ImWchar glyphRanges[] = {0x1, 0xFFFF, 0};
+	static ImFontConfig fontConfig;
 	fontConfig.FontDataOwnedByAtlas = false;
 
-	fontDefault = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeDefault, &fontConfig);
+	static const ImWchar emojiRanges[] = {0x1, 0x1FFFF, 0};
+	static ImFontConfig emojiFontConfig;
+	emojiFontConfig.OversampleH = emojiFontConfig.OversampleV = 1;
+	emojiFontConfig.MergeMode = true;
+	emojiFontConfig.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
 
 	static const ImWchar iconsRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
-	ImFontConfig iconsFontConfig;
-	iconsFontConfig.MergeMode = true;
+	static ImFontConfig iconsFontConfig;
 	iconsFontConfig.PixelSnapH = true;
 
-	io.Fonts->AddFontFromFileTTF("assets/fonts/fontawesome-webfont.ttf", fontSizeDefault, &iconsFontConfig, iconsRanges);
-
-	fontH1 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH1, &fontConfig);
-	fontH2 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH2, &fontConfig);
-	fontH3 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH3, &fontConfig);
+	ImGuiIO &io = ImGui::GetIO();
+	fontDefault = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeDefault, &fontConfig, glyphRanges);
+	io.Fonts->AddFontFromFileTTF(fontPathEmoji, fontSizeDefault, &emojiFontConfig, emojiRanges);
+	fontIcons = io.Fonts->AddFontFromFileTTF(fontPathIcons, fontSizeDefault, &iconsFontConfig, iconsRanges);
+	fontMono = io.Fonts->AddFontFromFileTTF(fontPathMono, fontSizeMono, &fontConfig, glyphRanges);
+	fontH1 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH1, &fontConfig, glyphRanges);
+	fontH2 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH2, &fontConfig, glyphRanges);
+	fontH3 = io.Fonts->AddFontFromMemoryTTF(fontData, size, fontSizeH3, &fontConfig, glyphRanges);
 
 	delete[] fontData;
 }
