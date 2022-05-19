@@ -1,6 +1,8 @@
 #include "GeminiClient.hpp"
 #include "Utilities.hpp"
 
+#include <charconv>
+
 #include <asio/buffer.hpp>
 #include <asio/connect.hpp>
 #include <asio/read.hpp>
@@ -13,88 +15,105 @@ using namespace gem;
 
 namespace
 {
-	static inline std::string_view extractHostName(std::string_view url)
+	static inline bool checkErrorCode(const asio::error_code &ec, [[maybe_unused]] std::string_view successMessage = "", std::string_view failMessage = "", bool eofIsError = true)
 	{
-		size_t p1 = url.find_first_of("//") + 2;
-		size_t p2 = url.find_first_of("/", p1);
+		if (!ec || (!eofIsError && ec == asio::error::eof))
+		{
+			//puts(successMessage.data());
+			return true;
+		}
 
-		return url.substr(p1, p2 - p1);
+		const std::string message = ec.message();
+		fprintf(stderr, "%s: %s\n", failMessage.data(), message.c_str());
+
+		return false;
 	}
 
 	using SocketPtr = std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>>;
 
-	static void receiveBodyAsync(SocketPtr socket, const std::string &code, const std::string &mime, const GeminiClient::CallbackType &callback)
+	static void receiveBodyAsync(SocketPtr socket, int code, const std::string &meta, const GeminiClient::CallbackType &callback)
 	{
 		auto buffer = std::make_shared<std::string>();
 
 		// capture socket to prolong its life
 		asio::async_read(*socket, asio::dynamic_buffer(*buffer),
-			[socket, buffer, code, mime, callback](const std::error_code &ec, std::size_t)
+			[socket, buffer, code, meta, callback](const std::error_code &ec, std::size_t)
 			{
 				if (checkErrorCode(ec, "Receiving Body successful", "Receiving Body failed", false))
 				{
 					if (callback)
 					{
-						callback(true, code, mime, buffer);
+						callback(code, meta, buffer);
 					}
 				}
 				else if (callback)
 				{
-					callback(false, code, mime, nullptr);
+					callback(code, meta, nullptr);
 				}
 			}
 		);
 	}
 
-	static void parseHeader(SocketPtr socket, const char *header, size_t headerSize, const GeminiClient::CallbackType &callback)
+	static void parseHeader(SocketPtr socket, std::string_view header, const GeminiClient::CallbackType &callback)
 	{
-		const char *code = "";
-		const char *mime = "";
+		int code = 5;
+		std::string meta;
 
-		if (header != nullptr && headerSize > 0)
+		if (!header.empty())
 		{
-			std::vector<std::string> strings = stringSplit(header);
+			std::from_chars_result result;
 
-			assert(strings.size() > 0);
-			assert(strings[0].size() > 0);
-			code = strings[0].c_str();
+			if (size_t spacePos = header.find(' '); spacePos != std::string::npos)
+			{
+				result = std::from_chars(header.data(), header.data() + spacePos, code);
+				meta = header.substr(spacePos + 1);
+			}
+			else
+			{
+				result = std::from_chars(header.data(), header.data() + header.size(), code);
+			}
+
+			assert(result.ec != std::errc::invalid_argument);
 
 			// TODO: return codes handling
 
-			switch (code[0])
+			switch (code)
 			{
-				case '1':
-					break;
-				case '2':
-				{
-					assert(strings.size() > 1);
-
-					mime = strings[1].c_str();
-
-					if (stringStartsWith(mime, "text/"))
+				case 20:
+					if (stringStartsWith(meta, "text/"))
 					{
-						receiveBodyAsync(socket, code, mime, callback);
+						receiveBodyAsync(socket, code, meta, callback);
 						return;
 					}
-
 					break;
-				}
-				case '3':
+				case 10:
+				case 11:
+				case 30:
+				case 31:
+				case 40:
+				case 41:
+				case 42:
+				case 43:
+				case 44:
+				case 51:
+				case 52:
+				case 53:
+				case 59:
+				case 60:
+				case 61:
+				case 62:
 					break;
-				case '4':
-					break;
-				case '5':
-					break;
-				case '6':
+				default:
+					assert(false);
 					break;
 			}
 		}
 
-		fprintf(stderr, "Malformed header :%s\n", header);
+		fprintf(stderr, "Malformed header: \"%s\"\n", header.data());
 
 		if (callback)
 		{
-			callback(false, code, mime, nullptr);
+			callback(code, std::string(meta), nullptr);
 		}
 	}
 
@@ -107,11 +126,11 @@ namespace
 			{
 				if (checkErrorCode(ec, "Receiving Header successful", "Receiving Header failed"))
 				{
-					parseHeader(socket, buffer->data(), size, callback);
+					parseHeader(socket, std::string_view(buffer->data(), size), callback);
 				}
 				else if (callback)
 				{
-					callback(false, "", "", nullptr);
+					callback(5, "", nullptr);
 				}
 			}
 		);
@@ -130,7 +149,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "", nullptr);
+					callback(4, "", nullptr);
 				}
 			}
 		);
@@ -147,7 +166,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "", nullptr);
+					callback(3, "", nullptr);
 				}
 			}
 		);
@@ -164,7 +183,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "", nullptr);
+					callback(2, "", nullptr);
 				}
 			}
 		);
@@ -184,7 +203,7 @@ namespace
 				}
 				else if (callback)
 				{
-					callback(false, "", "", nullptr);
+					callback(1, "", nullptr);
 				}
 			}
 		);
@@ -192,8 +211,9 @@ namespace
 
 	static inline asio::ssl::context createSslContext()
 	{
-		asio::ssl::context context(asio::ssl::context::sslv23);
-		context.set_default_verify_paths();
+		asio::ssl::context context(asio::ssl::context::tlsv12_client);
+		//context.set_default_verify_paths();
+		context.set_verify_mode(asio::ssl::verify_none);
 		return context;
 	}
 }

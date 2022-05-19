@@ -2,7 +2,6 @@
 #include "ImGuiSDLHelper.hpp"
 #include "MainWindow.hpp"
 #include "GeminiClient.hpp"
-#include "Utilities.hpp"
 
 using namespace gem;
 
@@ -24,29 +23,6 @@ App::~App()
 namespace
 {
 	bool isFirstOpening = true;
-
-	static void loadTab(std::shared_ptr<Tab> tab)
-	{
-		if (!gem::stringStartsWith(tab->url, "gemini://"))
-		{
-			tab->url = "gemini://" + tab->url;
-		}
-
-		// capture shared_ptr by value to prolong its life in case the tab was closed before the callback
-		GeminiClient().connectAsync(tab->url, 1965,
-			[tab](bool success, std::string code, std::string, std::shared_ptr<std::string> body)
-			{
-				if (success)
-				{
-					tab->setData(body);
-				}
-				else
-				{
-					tab->setError(code);
-				}
-			}
-		);
-	}
 }
 
 void App::update()
@@ -66,7 +42,9 @@ void App::update()
 	{
 		if (isFirstOpening)
 		{
-			_tabs.push_back(std::make_shared<Tab>(gui::emptyTab));
+			Tab tab;
+			tab.loadNewPage(std::make_shared<Page>(Page::newTabPage));
+			_tabs.push_back(tab);
 			isFirstOpening = false;
 		}
 		else
@@ -85,7 +63,7 @@ void App::render()
 {
 	ImGuiSDL::newFrame();
 
-	gui::drawMainWindow(_tabs, loadTab);
+	gui::drawMainWindow(_tabs);
 	//ImGui::ShowDemoWindow();
 
 	ImGuiSDL::render(_window);

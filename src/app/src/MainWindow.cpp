@@ -24,7 +24,7 @@ namespace
 	int duplicatedTabIndex = -1;
 	std::unordered_set<int> tabsToRemoveIndices;
 
-	static void removeClosedTabs(std::vector<std::shared_ptr<gem::Tab>> &tabs)
+	static void removeClosedTabs(std::vector<Tab> &tabs)
 	{
 		if (tabsToRemoveIndices.empty())
 		{
@@ -48,9 +48,9 @@ namespace
 		tabs.resize(last);
 	}
 
-	void drawLink(const Line &line)
+	void drawLink(Tab &tab, const Line &line)
 	{
-		static const ImU32 linkColorU32 = ImGui::GetColorU32({0.f, 0.f, 238.f / 255.f, 1.f});
+		static const ImU32 linkColorU32 = ImGui::GetColorU32({0.f, 100.f / 255.f, 220.f / 255.f, 1.f});
 		static const ImU32 transparentColorU32 = ImGui::GetColorU32({0.f, 0.f, 0.f, 0.f});
 
 		const char *start = nullptr, *end = nullptr;
@@ -76,7 +76,12 @@ namespace
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, transparentColorU32);
 		ImGui::PushStyleColor(ImGuiCol_Border, transparentColorU32);
 		ImGui::PushStyleColor(ImGuiCol_BorderShadow, transparentColorU32);
-		ImGui::SmallButton(start, end);
+
+		if (ImGui::SmallButton(start, end))
+		{
+			tab.loadNewPage(std::string(line.link), line.isAbsolute);
+		}
+
 		ImGui::PopStyleColor(6);
 
 		if (ImGui::IsItemHovered())
@@ -85,6 +90,7 @@ namespace
 			ImVec2 max = ImGui::GetItemRectMax();
 			min.y = max.y;
 			ImGui::GetWindowDrawList()->AddLine(min, max, linkColorU32, 1.0f);
+			ImGui::SetTooltip("%.*s", static_cast<int>(line.link.size()), line.link.data());
 		}
 	}
 
@@ -150,15 +156,17 @@ namespace
 		splitter.Merge(drawList);
 	}
 
-	void drawPage(const Tab &tab)
+	void drawPage(Tab &tab)
 	{
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0.f, 0.f});
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {0.f, 0.f});
 		ImGui::BeginChild("Page");
 
-		for (size_t i = 0; i < tab.lines.size(); i++)
+		for (size_t i = 0; i < page->lines.size(); i++)
 		{
-			const Line &line = tab.lines[i];
+			const Line &line = page->lines[i];
 
 			switch (line.type)
 			{
@@ -166,7 +174,7 @@ namespace
 					drawText(line);
 					break;
 				case LineType::Link:
-					drawLink(line);
+					drawLink(tab, line);
 					break;
 				case LineType::Block:
 					drawBlock(line, i);
@@ -195,59 +203,79 @@ namespace
 		ImGui::PopStyleVar(2);
 	}
 
-	void drawToolbar(std::shared_ptr<Tab> tab, const gui::LoadLinkCallback &callback)
+	void drawToolbar(Tab &tab)
 	{
+		constexpr ImVec2 toolbarButtonSize = {40.f, 0.f};
+
 		ImGui::PushFont(fontIcons);
 
-		ImGui::Button(ICON_FA_ARROW_LEFT, {40.f, 0.f});
-		ImGui::SameLine();
-		ImGui::Button(ICON_FA_ARROW_RIGHT, {40.f, 0.f});
+		if (tab.hasPrevPage())
+		{
+			if (ImGui::Button(ICON_FA_ARROW_LEFT, toolbarButtonSize))
+			{
+				tab.prevPage();
+			}
+		}
+		else
+		{
+			ImGui::BeginDisabled();
+			ImGui::Button(ICON_FA_ARROW_LEFT, toolbarButtonSize);
+			ImGui::EndDisabled();
+		}
 		ImGui::SameLine();
 
-		if (ImGui::Button(ICON_FA_REPEAT, {40.f, 0.f}))
+		if (tab.hasNextPage())
 		{
-			if (callback)
+			if (ImGui::Button(ICON_FA_ARROW_RIGHT, toolbarButtonSize))
 			{
-				callback(tab);
+				tab.nextPage();
 			}
+		}
+		else
+		{
+			ImGui::BeginDisabled();
+			ImGui::Button(ICON_FA_ARROW_RIGHT, toolbarButtonSize);
+			ImGui::EndDisabled();
+		}
+		ImGui::SameLine();
+
+		if (ImGui::Button(ICON_FA_REPEAT, toolbarButtonSize))
+		{
+			tab.loadCurrentPage();
 		}
 		ImGui::SameLine();
 
 		ImGui::PopFont();
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
-		if (ImGui::InputTextWithHint("", "Enter address", &tab->url, ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue))
+		if (ImGui::InputTextWithHint("", "Enter address", &tab.getAddressBarText(), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue))
 		{
-			if (callback)
-			{
-				callback(tab);
-			}
+			tab.loadNewPage(tab.getAddressBarText());
 		}
 		ImGui::SameLine();
 
 		ImGui::PushFont(fontIcons);
 
-		ImGui::Button(ICON_FA_COG, {40.f, 0.f});
+		if (ImGui::Button(ICON_FA_COG, toolbarButtonSize))
+		{
+		}
 
 		ImGui::PopFont();
 	}
 
-	void drawContextMenu(std::vector<std::shared_ptr<Tab>> &tabs, int index, const gui::LoadLinkCallback &callback)
+	void drawContextMenu(std::vector<Tab> &tabs, int index)
 	{
 		if (ImGui::BeginPopupContextItem())
 		{
 			if (ImGui::MenuItem("Reload"))
 			{
-				if (callback)
-				{
-					callback(tabs[index]);
-				}
+				tabs[index].loadCurrentPage();
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Duplicate"))
 			{
-				tabs.insert(tabs.begin() + index + 1, std::make_shared<Tab>(*tabs[index]));
+				tabs.insert(tabs.begin() + index + 1, tabs[index]);
 				duplicatedTabIndex = index + 1;
 				ImGui::CloseCurrentPopup();
 			}
@@ -284,7 +312,7 @@ namespace
 	}
 }
 
-void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const LoadLinkCallback &callback)
+void gem::gui::drawMainWindow(std::vector<Tab> &tabs)
 {
 	constexpr ImGuiWindowFlags mainWindowFlags =
 		ImGuiWindowFlags_NoTitleBar |
@@ -304,7 +332,7 @@ void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const Loa
 
 	for (int i = 0; i < tabs.size(); i++)
 	{
-		if (!tabs[i]->isOpen)
+		if (!tabs[i].isOpen())
 		{
 			tabsToRemoveIndices.insert(i);
 			continue;
@@ -319,20 +347,26 @@ void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const Loa
 			duplicatedTabIndex = -1;
 		}
 
+		bool isOpen = tabs[i].isOpen();
+		std::shared_ptr<Page> page = tabs[i].getCurrentPage();
+		std::string &label = page->label.empty() ? page->url : page->label;
+
 		ImGui::SetNextItemWidth(200);
 		ImGui::PushID(i);
-		bool isTabSelected = ImGui::BeginTabItem(tabs[i]->label.c_str(), &tabs[i]->isOpen, tabFlags);
+		bool isTabSelected = ImGui::BeginTabItem(label.c_str(), &isOpen, tabFlags);
 		ImGui::PopID();
 
-		drawContextMenu(tabs, i, callback);
+		tabs[i].setOpen(isOpen);
+
+		drawContextMenu(tabs, i);
 
 		if (isTabSelected)
 		{
 			// Toolbar
-			drawToolbar(tabs[i], callback);
+			drawToolbar(tabs[i]);
 
 			// Page
-			drawPage(*tabs[i]);
+			drawPage(tabs[i]);
 
 			ImGui::EndTabItem();
 		}
@@ -342,7 +376,9 @@ void gem::gui::drawMainWindow(std::vector<std::shared_ptr<Tab>> &tabs, const Loa
 
 	if (ImGui::TabItemButton(ICON_FA_PLUS, ImGuiTabItemFlags_Trailing))
 	{
-		tabs.push_back(std::make_shared<Tab>(emptyTab));
+		Tab tab;
+		tab.loadNewPage(std::make_shared<Page>(Page::newTabPage));
+		tabs.push_back(tab);
 	}
 
 	ImGui::PopFont();

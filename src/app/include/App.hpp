@@ -26,6 +26,6 @@ namespace gem
 
 		bool _isDone {false};
 
-		std::vector<std::shared_ptr<Tab>> _tabs;
+		std::vector<Tab> _tabs;
 	};
 }

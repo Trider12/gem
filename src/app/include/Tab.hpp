@@ -1,42 +1,33 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <memory>
+#include "Page.hpp"
 
 namespace gem
 {
-	enum class LineType
+	class Tab
 	{
-		Text = 0,
-		Link,
-		Block,
-		Header1,
-		Header2,
-		Header3,
-		List,
-		Quote
-	};
+	public:
+		bool isOpen();
+		void setOpen(bool open);
 
-	struct Line
-	{
-		LineType type {LineType::Text};
-		std::string_view text; // text to be displayed
-		std::string_view link; // only when type == LineType::Link
-	};
+		bool hasNextPage();
+		bool hasPrevPage();
 
-	struct Tab
-	{
-		void setError(std::string errorString);
-		void setData(std::shared_ptr<std::string> &dataPtr);
+		void nextPage();
+		void prevPage();
 
-		std::string url;
-		std::string label;
-		std::string error;
-		std::shared_ptr<std::string> data;
+		std::shared_ptr<Page> getCurrentPage();
+		void loadCurrentPage();
 
-		std::vector<Line> lines;
+		void loadNewPage(const std::string &url, bool isAbsolute = true);
+		void loadNewPage(std::shared_ptr<Page> page);
 
-		bool isOpen {true};
+		std::string &getAddressBarText();
+
+	private:
+		bool _isOpen {true};
+		std::string _addressBarText;
+		std::vector<std::shared_ptr<Page>> _pages;
+		int32_t _currentPageIndex {-1};
 	};
 }

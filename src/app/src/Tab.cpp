@@ -1,239 +1,166 @@
 #include "Tab.hpp"
-
-#include <cassert>
-
-namespace
-{
-	static inline bool isBlank(const std::string &str, size_t index)
-	{
-		return std::isblank(static_cast<unsigned char>(str[index]));
-	}
-}
+#include "GeminiClient.hpp"
+#include "Utilities.hpp"
 
 using namespace gem;
 
-void Tab::setError(std::string errorString)
+bool Tab::isOpen()
 {
-	error = "Error " + errorString; //TODO: improve this
+	return _isOpen;
 }
 
-void Tab::setData(std::shared_ptr<std::string> &dataPtr)
+void Tab::setOpen(bool open)
 {
-	lines.clear();
-	data = dataPtr;
-	std::string_view view(*data);
-	const size_t size = data->size();
+	_isOpen = open;
+}
 
-	LineType lineType = LineType::Text;
-	bool newLineStarted = true, blockModeOn = false, foundSpaceBetweenLinkAndText = false;
-	int64_t lineTextStart = -1, lineLinkEnd = -1, lineLinkStart = -1;
+bool Tab::hasNextPage()
+{
+	return _currentPageIndex < _pages.size() - 1;
+}
 
-	for (size_t i = 0; i < size; i++)
+bool Tab::hasPrevPage()
+{
+	return _currentPageIndex > 0;
+}
+
+void Tab::nextPage()
+{
+	_currentPageIndex++;
+	std::shared_ptr<Page> page = getCurrentPage();
+	_addressBarText = page->url;
+
+	if (!page->isLoaded)
 	{
-		if ((*data)[i] == '\n' || i == size - 1) // line ended or eof
+		loadCurrentPage();
+	}
+}
+
+void Tab::prevPage()
+{
+	_currentPageIndex--;
+	std::shared_ptr<Page> page = getCurrentPage();
+	_addressBarText = page->url;
+
+	if (!page->isLoaded)
+	{
+		loadCurrentPage();
+	}
+}
+
+std::shared_ptr<Page> Tab::getCurrentPage()
+{
+	assert(_currentPageIndex >= 0 && _currentPageIndex < _pages.size());
+	return _pages[_currentPageIndex];
+}
+
+void Tab::loadCurrentPage()
+{
+	std::shared_ptr<Page> page = getCurrentPage();
+
+	if (page->url.find_first_of("//") == std::string::npos)
+	{
+		page->url = "gemini://" + page->url;
+	}
+
+	std::weak_ptr<Page> pageWeakPtr = page;
+
+	GeminiClient().connectAsync(page->url, 1965,
+		[pageWeakPtr](size_t code, std::string meta, std::shared_ptr<std::string> body)
 		{
-			if (!blockModeOn) // not inside a block
+			if (!pageWeakPtr.expired())
 			{
-				if (lineType == LineType::Text && newLineStarted) // empty line
-				{
-					lines.push_back({lineType, ""});
-				}
-				else
-				{
-					if (lineTextStart >= 0) // if a line has actual text after special symbols
-					{
-						size_t lineTextEnd = (i == size - 1 ? size : i);
+				std::shared_ptr<Page> page = pageWeakPtr.lock();
+				page->setData(code, meta, body);
 
-						switch (lineType)
-						{
-							case LineType::Link:
-							{
-								assert(lineLinkEnd >= 0);
-								assert(lineLinkStart >= 0);
-								lines.push_back({lineType, view.substr(lineTextStart, lineTextEnd - lineTextStart), view.substr(lineLinkStart, lineLinkEnd - lineLinkStart)});
-								lineLinkStart = -1;
-								foundSpaceBetweenLinkAndText = false;
-								break;
-							}
-							case LineType::Block:
-							{
-								lines.push_back({lineType, view.substr(lineTextStart, lineTextEnd - 3 - lineTextStart)}); // skip trailing ```
-								break;
-							}
-							default:
-							{
-								lines.push_back({lineType, view.substr(lineTextStart, lineTextEnd - lineTextStart)});
-								break;
-							}
-						}
-
-						lineTextStart = -1;
-					}
-				}
-
-				lineType = LineType::Text;
+				page->hostname = std::string(extractHostName(page->url));
+				page->isLoaded = true;
 			}
-
-			newLineStarted = true;
-			continue;
 		}
+	);
+}
 
-		if (newLineStarted) // beginning of a new line
+void Tab::loadNewPage(const std::string &url, bool isAbsolute)
+{
+	std::string newUrl;
+
+	if (isAbsolute) // i.e. has schema
+	{
+		newUrl = url;
+	}
+	else
+	{
+		std::shared_ptr<Page> page = getCurrentPage();
+
+		if (url[0] == '/') // relative to hostname
 		{
-			if (blockModeOn)
-			{
-				if (lineTextStart == -1)
-				{
-					lineTextStart = i; // start block text
-				}
-
-				if (i + 2 < size)
-				{
-					if ((*data)[i] == '`' && (*data)[i + 1] == '`' && (*data)[i + 2] == '`')
-					{
-						blockModeOn = false;
-						i += 2; // skip the 2nd and the 3rd '`'
-					}
-				}
-				else // page ended without closing a block
-				{
-					blockModeOn = false;
-					i = size; // skip to the end
-					lines.push_back({lineType, view.substr(lineTextStart, i - lineTextStart)});
-					lineTextStart = -1;
-				}
-
-				newLineStarted = false;
-				continue; // ignore everything inside a block
-			}
-
-			if (isBlank(*data, i)) // ignore spaces or tabs
-			{
-				continue;
-			}
-
-			lineType = LineType::Text;
-
-			if ((*data)[i] == '#')
-			{
-				lineType = LineType::Header1;
-			}
-
-			if ((*data)[i] == '>')
-			{
-				lineType = LineType::Quote;
-			}
-
-			if (i + 1 < size)
-			{
-				if ((*data)[i] == '=' && (*data)[i + 1] == '>')
-				{
-					lineType = LineType::Link;
-				}
-
-				if ((*data)[i] == '#' && (*data)[i + 1] == '#')
-				{
-					lineType = LineType::Header2;
-				}
-
-				if ((*data)[i] == '*' && (*data)[i + 1] == ' ')
-				{
-					lineType = LineType::List;
-				}
-			}
-
-			if (i + 2 < size)
-			{
-				if ((*data)[i] == '#' && (*data)[i + 1] == '#' && (*data)[i + 2] == '#')
-				{
-					lineType = LineType::Header3;
-				}
-
-				if ((*data)[i] == '`' && (*data)[i + 1] == '`' && (*data)[i + 2] == '`')
-				{
-					lineType = LineType::Block;
-				}
-			}
-
-			switch (lineType)
-			{
-				case LineType::Text:
-					lineTextStart = i; // start immediately
-					break;
-				case LineType::Link:
-					i++; // skip '>'
-					break;
-				case LineType::Block:
-					i += 2; // skip the 2nd and the 3rd '`'
-					blockModeOn = true;
-					break;
-				case LineType::Header1:
-					break;
-				case LineType::Header2:
-					i++; // skip the 2nd '#'
-					break;
-				case LineType::Header3:
-					i += 2; //skip the 2nd and the 3rd '#'
-					break;
-				case LineType::List:
-					i++; // skip ' '
-					break;
-				case LineType::Quote:
-					break;
-			}
-
-			newLineStarted = false;
+			newUrl = "gemini://" + page->hostname + url;
 		}
-		else // somewhere inside a line
+		else // relative to current page
 		{
-			switch (lineType)
+			auto getDirName = [](std::string_view path)
 			{
-				case LineType::Link:
-				{
-					if (lineLinkStart == -1)
-					{
-						if (!isBlank(*data, i)) // skip leading spaces
-						{
-							lineLinkStart = i;
-						}
-					}
-					else if (lineTextStart == -1)
-					{
-						if (isBlank(*data, i))
-						{
-							if (lineLinkEnd == -1)
-							{
-								lineLinkEnd = i;
-							}
+				return path.substr(0, path.find_last_of('/', path.size() - 2) + 1);
+			};
 
-							foundSpaceBetweenLinkAndText = true;
-						}
-						else if (foundSpaceBetweenLinkAndText)
-						{
-							lineTextStart = i;
-							foundSpaceBetweenLinkAndText = false;
-						}
-					}
-					break;
-				}
-				case LineType::Header1:
-				case LineType::Header2:
-				case LineType::Header3:
-				case LineType::List:
-				case LineType::Quote:
-				{
-					if (lineTextStart == -1)
-					{
-						if (!isBlank(*data, i)) // skip leading spaces
-						{
-							lineTextStart = i;
-						}
-					}
-					break;
-				}
-				default:
-					break;
+			std::string_view baseUrl = page->url;
+
+			if (*baseUrl.rbegin() != '/') // current page is not a directory
+			{
+				baseUrl = getDirName(baseUrl);
 			}
+
+			std::string_view relativeUrl = url;
+
+			if (relativeUrl == ".")
+			{
+				relativeUrl = "";
+			}
+			else if (relativeUrl == "..")
+			{
+				baseUrl = getDirName(baseUrl);
+				relativeUrl = "";
+			}
+			else
+			{
+				if (stringStartsWith(relativeUrl, "./"))
+				{
+					relativeUrl = relativeUrl.substr(2);
+				}
+
+				while (stringStartsWith(relativeUrl, "../"))
+				{
+					baseUrl = getDirName(baseUrl);
+					relativeUrl = relativeUrl.substr(3);
+				}
+			}
+
+			newUrl = std::string(baseUrl) + std::string(relativeUrl);
 		}
 	}
+
+	_pages.resize(_currentPageIndex + 1);
+	_pages.push_back(std::make_shared<Page>(newUrl));
+	_currentPageIndex++;
+	_addressBarText = getCurrentPage()->url;
+
+	loadCurrentPage();
+}
+
+void Tab::loadNewPage(std::shared_ptr<Page> page)
+{
+	_pages.resize(_currentPageIndex + 1);
+	_pages.push_back(page);
+	_currentPageIndex++;
+	_addressBarText = getCurrentPage()->url;
+
+	if (!page->isLoaded)
+	{
+		loadCurrentPage();
+	}
+}
+
+std::string &Tab::getAddressBarText()
+{
+	return _addressBarText;
 }

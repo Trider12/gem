@@ -3,25 +3,10 @@
 #include <string_view>
 #include <sstream>
 #include <vector>
-
-#include <asio/error_code.hpp>
+#include <cassert>
 
 namespace gem
 {
-	static inline bool checkErrorCode(const asio::error_code &ec, [[maybe_unused]] std::string_view successMessage = "", std::string_view failMessage = "", bool eofIsError = true)
-	{
-		if (!ec || (!eofIsError && ec == asio::error::eof))
-		{
-			//puts(successMessage.data());
-			return true;
-		}
-
-		const std::string message = ec.message();
-		fprintf(stderr, "%s: %s\n", failMessage.data(), message.c_str());
-
-		return false;
-	}
-
 	static inline void stringTrimLeft(std::string &str) {
 		str.erase(str.begin(), std::find_if(str.begin(), str.end(),
 			[](unsigned char ch) {
@@ -56,5 +41,19 @@ namespace gem
 	static inline bool stringStartsWith(std::string_view str, std::string_view prefix)
 	{
 		return str.rfind(prefix, 0) == 0;
+	}
+
+	static inline std::string_view extractHostName(std::string_view url)
+	{
+		size_t p1 = url.find("//");
+		assert(p1 != std::string::npos);
+		p1 += 2;
+
+		if (size_t p2 = url.find('/', p1); p2 < url.size())
+		{
+			return url.substr(p1, p2 - p1);
+		}
+
+		return url.substr(p1);
 	}
 }
