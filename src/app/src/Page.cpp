@@ -281,7 +281,7 @@ void Page::setData(size_t code, std::string meta, std::shared_ptr<std::string> &
 
 	for (const Line &line : lines)
 	{
-		if (!line.text.empty())
+		if (line.type != LineType::Block && !line.text.empty())
 		{
 			label = line.text;
 			break;

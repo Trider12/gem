@@ -58,9 +58,9 @@ void Tab::loadCurrentPage()
 {
 	std::shared_ptr<Page> page = getCurrentPage();
 
-	if (page->url.find_first_of("//") == std::string::npos)
+	if (page->url.empty())
 	{
-		page->url = "gemini://" + page->url;
+		return;
 	}
 
 	std::weak_ptr<Page> pageWeakPtr = page;
@@ -80,11 +80,11 @@ void Tab::loadCurrentPage()
 	);
 }
 
-void Tab::loadNewPage(const std::string &url, bool isAbsolute)
+void Tab::loadNewPage(const std::string &url, bool hasSchema)
 {
 	std::string newUrl;
 
-	if (isAbsolute) // i.e. has schema
+	if (hasSchema)
 	{
 		newUrl = url;
 	}

@@ -1,31 +1,26 @@
 #pragma once
 
-#include "Tab.hpp"
+#include "AppContext.hpp"
+#include "AppWindow.hpp"
 
 #include <vector>
-#include <memory>
-
-struct SDL_Window;
 
 namespace gem
 {
 	class App
 	{
 	public:
-		App(int width, int height);
+		App();
+		App(const App &other) = delete;
 		~App();
 
 		bool isDone() const { return _isDone; }
 		void update();
+		void newWindow();
 
 	private:
-		void render();
-
-		SDL_Window *_window {nullptr};
-		void *_glContext {nullptr};
-
 		bool _isDone {false};
-
-		std::vector<Tab> _tabs;
+		AppContext _context;
+		std::vector<AppWindow> _windows;
 	};
 }

@@ -7,10 +7,6 @@ project(${TARGET})
 # Sources
 # ==================================================================================================
 
-file(GLOB HEADERS
-	${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp
-)
-
 file(GLOB SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${DIR_THIRDPARTY}/imgui/*.cpp
@@ -24,10 +20,10 @@ file(GLOB SOURCES
 # Target
 # ================================================================================================== 
 
-add_executable(${TARGET} ${HEADERS} ${SOURCES})
+add_executable(${TARGET} ${SOURCES})
+
 set_target_properties(${TARGET} PROPERTIES 
-	RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Release
-	RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Debug
+	RUNTIME_OUTPUT_DIRECTORY ${DIR_EXPORT}
 )
 
 # ==================================================================================================
@@ -43,6 +39,7 @@ target_include_directories(${TARGET} PRIVATE
 	${DIR_THIRDPARTY}/IconFontCppHeaders
 	${DIR_THIRDPARTY}/asio/asio/include
 	${DIR_THIRDPARTY}/openssl/include
+	${DIR_THIRDPARTY}/rapidjson/include
 )
 
 target_compile_definitions(${TARGET} PRIVATE 
@@ -51,6 +48,7 @@ target_compile_definitions(${TARGET} PRIVATE
 	_WIN32_WINNT=0x0601
 	IMGUI_ENABLE_FREETYPE
 	IMGUI_USE_WCHAR32
+	RAPIDJSON_HAS_STDSTRING
 )
 
 # ==================================================================================================
@@ -99,8 +97,4 @@ target_link_libraries(${TARGET} PRIVATE
 # Custom commands
 # ==================================================================================================
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-	file(COPY ${DIR_ASSETS} DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Debug)
-else()
-	file(COPY ${DIR_ASSETS} DESTINATION ${DIR_EXPORT}/${PLATFORM}/${ARCH}/Release)
-endif()
+file(COPY ${DIR_ASSETS} DESTINATION ${DIR_EXPORT})
