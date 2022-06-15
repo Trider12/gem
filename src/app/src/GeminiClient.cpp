@@ -209,11 +209,26 @@ namespace
 		);
 	}
 
+	static bool verifyCertificate(bool preverified, asio::ssl::verify_context &context)
+	{
+		char name[256];
+		X509 *cert = X509_STORE_CTX_get_current_cert(context.native_handle());
+		X509_NAME_oneline(X509_get_subject_name(cert), name, 256);
+		printf("Verifying %s\n", name);
+
+		return true;
+	}
+
 	static inline asio::ssl::context createSslContext()
 	{
 		asio::ssl::context context(asio::ssl::context::tlsv12_client);
-		//context.set_default_verify_paths();
-		context.set_verify_mode(asio::ssl::verify_none);
+		context.set_options(asio::ssl::context::default_workarounds);
+		context.set_default_verify_paths();
+		context.set_verify_mode(asio::ssl::context::verify_none);
+		context.set_verify_callback(verifyCertificate);
+		context.use_certificate_file("assets/certificates/gem.crt", asio::ssl::context_base::file_format::pem);
+		context.use_private_key_file("assets/certificates/gem.key", asio::ssl::context_base::file_format::pem);
+
 		return context;
 	}
 }
