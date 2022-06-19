@@ -14,3 +14,6 @@
 [submodule "3rdparty/rapidjson"]
 	path = 3rdparty/rapidjson
 	url = https://github.com/Tencent/rapidjson
+[submodule "3rdparty/nativefiledialog-extended"]
+	path = 3rdparty/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended

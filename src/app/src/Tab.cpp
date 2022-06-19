@@ -1,6 +1,7 @@
 #include "Tab.hpp"
-#include "GeminiClient.hpp"
 #include "Utilities.hpp"
+
+#include <string_view>
 
 using namespace gem;
 
@@ -28,9 +29,9 @@ void Tab::nextPage()
 {
 	_currentPageIndex++;
 	std::shared_ptr<Page> page = getCurrentPage();
-	_addressBarText = page->url;
+	_addressBarText = std::string(page->getUrl());
 
-	if (!page->isLoaded)
+	if (!page->isLoaded())
 	{
 		loadCurrentPage();
 	}
@@ -40,9 +41,9 @@ void Tab::prevPage()
 {
 	_currentPageIndex--;
 	std::shared_ptr<Page> page = getCurrentPage();
-	_addressBarText = page->url;
+	_addressBarText = std::string(page->getUrl());
 
-	if (!page->isLoaded)
+	if (!page->isLoaded())
 	{
 		loadCurrentPage();
 	}
@@ -58,29 +59,15 @@ void Tab::loadCurrentPage()
 {
 	std::shared_ptr<Page> page = getCurrentPage();
 
-	if (page->url.empty())
+	if (page->getUrl().empty())
 	{
 		return;
 	}
 
-	std::weak_ptr<Page> pageWeakPtr = page;
-
-	GeminiClient().connectAsync(page->url, 1965,
-		[pageWeakPtr](size_t code, std::string meta, std::shared_ptr<std::string> body)
-		{
-			if (!pageWeakPtr.expired())
-			{
-				std::shared_ptr<Page> page = pageWeakPtr.lock();
-				page->setData(code, meta, body);
-
-				page->hostname = std::string(extractHostName(page->url));
-				page->isLoaded = true;
-			}
-		}
-	);
+	page->load();
 }
 
-void Tab::loadNewPage(const std::string &url, bool hasSchema)
+void Tab::loadNewPage(std::string_view url, bool hasSchema, std::string_view baseUrl)
 {
 	std::string newUrl;
 
@@ -90,11 +77,14 @@ void Tab::loadNewPage(const std::string &url, bool hasSchema)
 	}
 	else
 	{
-		std::shared_ptr<Page> page = getCurrentPage();
-
-		if (url[0] == '/') // relative to hostname
+		if (baseUrl.empty())
 		{
-			newUrl = "gemini://" + page->hostname + url;
+			baseUrl = getCurrentPage()->getUrl();
+		}
+
+		if (url[0] == '/') // relative to host name
+		{
+			newUrl = "gemini://" + std::string(extractHostName(baseUrl)) + std::string(url);
 		}
 		else // relative to current page
 		{
@@ -102,8 +92,6 @@ void Tab::loadNewPage(const std::string &url, bool hasSchema)
 			{
 				return path.substr(0, path.find_last_of('/', path.size() - 2) + 1);
 			};
-
-			std::string_view baseUrl = page->url;
 
 			if (*baseUrl.rbegin() != '/') // current page is not a directory
 			{
@@ -142,7 +130,7 @@ void Tab::loadNewPage(const std::string &url, bool hasSchema)
 	_pages.resize(_currentPageIndex + 1);
 	_pages.push_back(std::make_shared<Page>(newUrl));
 	_currentPageIndex++;
-	_addressBarText = getCurrentPage()->url;
+	_addressBarText = std::string(getCurrentPage()->getUrl());
 
 	loadCurrentPage();
 }
@@ -152,9 +140,9 @@ void Tab::loadNewPage(std::shared_ptr<Page> page)
 	_pages.resize(_currentPageIndex + 1);
 	_pages.push_back(page);
 	_currentPageIndex++;
-	_addressBarText = getCurrentPage()->url;
+	_addressBarText = std::string(getCurrentPage()->getUrl());
 
-	if (!page->isLoaded)
+	if (!page->isLoaded())
 	{
 		loadCurrentPage();
 	}

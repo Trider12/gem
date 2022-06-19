@@ -1,290 +1,328 @@
-#include "Tab.hpp"
+#include "Page.hpp"
+
 #include "Utilities.hpp"
 
 #include <cassert>
+#include <fstream>
+
+#include <stb_image.h>
+#include <SDL_opengl.h>
 
 using namespace gem;
 
 namespace
 {
-	static inline bool isBlank(const std::string &str, size_t index)
+	[[maybe_unused]] static bool isMimeSupported(std::string_view mime)
 	{
-		return std::isblank(static_cast<unsigned char>(str[index]));
+		return stringStartsWith(mime, "text") ||
+			(stringStartsWith(mime, "image") &&
+				(stringStartsWith(&mime[6], "png") || stringStartsWith(&mime[6], "jpeg") || stringStartsWith(&mime[6], "gif")));
 	}
 
-	static inline Page createNewTabPage()
+	static inline void clearPageData(PageType type, PageData *data)
 	{
-		Page page;
-		page.label = "New Tab";
-		page.isLoaded = true;
-
-		return page;
-	}
-}
-
-const Page Page::newTabPage = createNewTabPage();
-
-Page::Page(std::string url) :url {url}
-{
-}
-
-void Page::setData(size_t code, std::string meta, std::shared_ptr<std::string> &body)
-{
-	_code = code;
-	_meta = meta;
-	lines.clear();
-
-	if (_code == 20)
-	{
-		_data = body;
-	}
-	else
-	{
-		_data = std::make_shared<std::string>("Error " + std::to_string(code));
-	}
-
-	if (!_data)
-	{
-		return;
-	}
-
-	std::string_view view(*_data);
-	const size_t size = _data->size();
-
-	LineType lineType = LineType::Text;
-	bool newLineStarted = true, blockModeOn = false, foundSpaceBetweenLinkAndText = false;
-	int64_t lineTextStart = -1, lineLinkEnd = -1, lineLinkStart = -1;
-
-	for (size_t i = 0; i < size; i++)
-	{
-		if ((*_data)[i] == '\n' || i == size - 1) // line ended or eof
+		if (data != nullptr)
 		{
-			if (!blockModeOn) // not inside a block
+			switch (type)
 			{
-				size_t lineEnd = (i == size - 1 ? size : i);
-
-				switch (lineType)
-				{
-					case LineType::Text:
-					{
-						if (newLineStarted) // empty line
-						{
-							lines.push_back({lineType, ""});
-						}
-						else
-						{
-							lines.push_back({lineType, view.substr(lineTextStart, lineEnd - lineTextStart)});
-						}
-
-						break;
-					}
-					case LineType::Link:
-					{
-						Line line;
-
-						assert(lineLinkStart >= 0);
-						if (lineLinkEnd > lineLinkStart) // link with text
-						{
-							line = {lineType, view.substr(lineTextStart, lineEnd - lineTextStart), view.substr(lineLinkStart, lineLinkEnd - lineLinkStart)};
-						}
-						else // just link
-						{
-							line = {lineType, "", view.substr(lineLinkStart, lineEnd - lineLinkStart)};
-						}
-
-						line.isAbsolute = line.link.find("//") != std::string::npos;
-						lines.push_back(line);
-
-						lineLinkStart = -1;
-						lineLinkEnd = -1;
-						foundSpaceBetweenLinkAndText = false;
-
-						break;
-					}
-					case LineType::Block:
-						lineEnd -= 3; // skip trailing ```
-					default:
-						if (lineTextStart >= 0)
-						{
-							lines.push_back({lineType, view.substr(lineTextStart, lineEnd - lineTextStart)});
-						}
-
-						break;
-				}
-
-				lineTextStart = -1;
-				lineType = LineType::Text;
-			}
-
-			newLineStarted = true;
-			continue;
-		}
-
-		if (newLineStarted) // beginning of a new line
-		{
-			if (blockModeOn)
-			{
-				if (lineTextStart == -1)
-				{
-					lineTextStart = i; // start block text
-				}
-
-				if (i + 2 < size)
-				{
-					if ((*_data)[i] == '`' && (*_data)[i + 1] == '`' && (*_data)[i + 2] == '`')
-					{
-						blockModeOn = false;
-						i += 2; // skip the 2nd and the 3rd '`'
-					}
-				}
-				else // page ended without closing a block
-				{
-					blockModeOn = false;
-					i = size; // skip to the end
-					lines.push_back({lineType, view.substr(lineTextStart, i - lineTextStart)});
-					lineTextStart = -1;
-				}
-
-				newLineStarted = false;
-				continue; // ignore everything inside a block
-			}
-
-			if (isBlank(*_data, i)) // ignore spaces or tabs
-			{
-				continue;
-			}
-
-			lineType = LineType::Text;
-
-			if ((*_data)[i] == '#')
-			{
-				lineType = LineType::Header1;
-			}
-
-			if ((*_data)[i] == '>')
-			{
-				lineType = LineType::Quote;
-			}
-
-			if (i + 1 < size)
-			{
-				if ((*_data)[i] == '=' && (*_data)[i + 1] == '>')
-				{
-					lineType = LineType::Link;
-				}
-
-				if ((*_data)[i] == '#' && (*_data)[i + 1] == '#')
-				{
-					lineType = LineType::Header2;
-				}
-
-				if ((*_data)[i] == '*' && (*_data)[i + 1] == ' ')
-				{
-					lineType = LineType::List;
-				}
-			}
-
-			if (i + 2 < size)
-			{
-				if ((*_data)[i] == '#' && (*_data)[i + 1] == '#' && (*_data)[i + 2] == '#')
-				{
-					lineType = LineType::Header3;
-				}
-
-				if ((*_data)[i] == '`' && (*_data)[i + 1] == '`' && (*_data)[i + 2] == '`')
-				{
-					lineType = LineType::Block;
-				}
-			}
-
-			switch (lineType)
-			{
-				case LineType::Text:
-					lineTextStart = i; // start immediately
+				case PageType::Image:
+					glDeleteTextures(1, &static_cast<ImagePageData *>(data)->textureId);
 					break;
-				case LineType::Link:
-					i++; // skip '>'
-					break;
-				case LineType::Block:
-					i += 2; // skip the 2nd and the 3rd '`'
-					blockModeOn = true;
-					break;
-				case LineType::Header1:
-					break;
-				case LineType::Header2:
-					i++; // skip the 2nd '#'
-					break;
-				case LineType::Header3:
-					i += 2; //skip the 2nd and the 3rd '#'
-					break;
-				case LineType::List:
-					i++; // skip ' '
-					break;
-				case LineType::Quote:
-					break;
-			}
-
-			newLineStarted = false;
-		}
-		else // somewhere inside a line
-		{
-			switch (lineType)
-			{
-				case LineType::Link:
-				{
-					if (lineLinkStart == -1)
-					{
-						if (!isBlank(*_data, i)) // skip leading spaces
-						{
-							lineLinkStart = i;
-						}
-					}
-					else if (lineTextStart == -1)
-					{
-						if (isBlank(*_data, i))
-						{
-							if (lineLinkEnd == -1)
-							{
-								lineLinkEnd = i;
-							}
-
-							foundSpaceBetweenLinkAndText = true;
-						}
-						else if (foundSpaceBetweenLinkAndText)
-						{
-							lineTextStart = i;
-							foundSpaceBetweenLinkAndText = false;
-						}
-					}
-					break;
-				}
-				case LineType::Header1:
-				case LineType::Header2:
-				case LineType::Header3:
-				case LineType::List:
-				case LineType::Quote:
-				{
-					if (lineTextStart == -1)
-					{
-						if (!isBlank(*_data, i)) // skip leading spaces
-						{
-							lineTextStart = i;
-						}
-					}
-					break;
-				}
 				default:
 					break;
 			}
 		}
+
+		delete data;
 	}
 
-	for (const Line &line : lines)
+	static void loadImageFromMemory(unsigned char *data, int size, int &width, int &height, unsigned int &textureId)
 	{
-		if (line.type != LineType::Block && !line.text.empty())
+		unsigned char *imageData = stbi_load_from_memory(data, size, &width, &height, nullptr, 4);
+
+		glGenTextures(1, &textureId);
+		glBindTexture(GL_TEXTURE_2D, textureId);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
+
+		stbi_image_free(imageData);
+	}
+}
+
+const Page Page::newTabPage = Page(PageType::NewTab, "New Tab");
+
+Page::Page(std::string url) : _url {url}
+{
+}
+
+Page::Page(PageType type, std::string_view label) : 
+	_label {label},
+	_pageType {type}
+{
+}
+
+Page::Page(const Page &page) :
+	_url {page._url},
+	_label {page._label},
+	_pageType {page._pageType},
+	_pageData {nullptr},
+	_isLoaded {page._isLoaded},
+	_isDownloaded {page._isDownloaded},
+	_code {page._code},
+	_error {page._error},
+	_meta {page._meta},
+	_binaryData {page._binaryData}
+{
+}
+
+Page::~Page()
+{
+	clearPageData(_pageType, _pageData);
+}
+
+std::string_view Page::getUrl()
+{
+	return _url;
+}
+
+std::string_view Page::getLabel()
+{
+	return _label;
+}
+
+std::string_view Page::getData()
+{
+	return std::string_view(_binaryData->data(), _binaryData->size());
+}
+
+std::string_view Page::getError()
+{
+	return _error;
+}
+
+PageType Page::getPageType()
+{
+	return _pageType;
+}
+
+bool Page::isLoaded()
+{
+	return _isLoaded;
+}
+
+bool Page::isDownloaded()
+{
+	return _isDownloaded;
+}
+
+void Page::load()
+{
+	_isLoaded = false;
+	_isDownloaded = false;
+
+	std::shared_ptr<GeminiClient> client = std::make_shared<GeminiClient>();
+	client->connectAsync(std::bind(&connectAsyncCallback, client, weak_from_this(), std::placeholders::_1), _url, 1965);
+}
+
+void Page::download(const char *path)
+{
+	_isDownloaded = true;
+
+	if (path == nullptr)
+	{
+		return;
+	}
+
+	std::ofstream ofs(path, std::ios::binary);
+
+	if (ofs)
+	{
+		ofs.write(_binaryData->data(), _binaryData->size());
+	}
+	else
+	{
+		fprintf(stderr, "Failed to save file to the directory \"%s\"\n", path);
+	}
+}
+
+void Page::init(StatusCode code, std::string meta, std::shared_ptr<std::vector<char>> data)
+{
+	_code = code;
+	_meta = meta;
+	_isLoaded = true;
+
+	clearPageData(_pageType, _pageData);
+
+	if (_code == StatusCode::SUCCESS)
+	{
+		_binaryData = data;
+
+		if (*_url.rbegin() == '/')
 		{
-			label = line.text;
-			break;
+			_label = _url;
 		}
+		else
+		{
+			_label = _url.substr(_url.find_last_of('/') + 1);
+		}
+	}
+	else
+	{
+		_error = std::to_string(static_cast<int>(code)) + " " + statusCodeToString(code);
+		_label = _error;
+		return;
+	}
+
+	if (!_binaryData)
+	{
+		return;
+	}
+
+	_pageType = PageType::Unsupported;
+
+	if (stringStartsWith(meta, "text"))
+	{
+		_pageType = PageType::Text;
+
+		if (stringStartsWith(&meta[5], "gemini"))
+		{
+			_pageType = PageType::Gemtext;
+
+			GemtextPageData *gemtextPageData = new GemtextPageData();
+			_pageData = gemtextPageData;
+			GemtextParser::parse(gemtextPageData->lines, *_binaryData);
+
+			for (const GemtextLine &line : gemtextPageData->lines)
+			{
+				if (line.type != GemtextLineType::Block && !line.text.empty())
+				{
+					_label = line.text;
+					break;
+				}
+			}
+		}
+	}
+	else if (stringStartsWith(meta, "image"))
+	{
+		if (stringStartsWith(&meta[6], "png") || stringStartsWith(&meta[6], "jpeg") || stringStartsWith(&meta[6], "gif"))
+		{
+			_pageType = PageType::Image;
+
+			ImagePageData *imagePageData = new ImagePageData();
+			_pageData = imagePageData;
+
+			loadImageFromMemory(
+				reinterpret_cast<unsigned char *>(_binaryData->data()),
+				static_cast<int>(_binaryData->size()),
+				imagePageData->imageWidth,
+				imagePageData->imageHeight,
+				imagePageData->textureId
+			);
+		}
+	}
+}
+
+void Page::setError(GeminiClient::ClientCode code)
+{
+	switch (code)
+	{
+		case GeminiClient::ClientCode::SUCCESS:
+			break;
+		case GeminiClient::ClientCode::HOST_NAME_RESOLUTION_ERROR:
+		case GeminiClient::ClientCode::CONNECTION_ERROR:
+			_error = "Server not found.\nCheck if the address is correct or you have a network connection.";
+			break;
+		case GeminiClient::ClientCode::TLS_HANDSHAKE_ERROR:
+			_error = "TLS handshake with the site failed.";
+			break;
+		case GeminiClient::ClientCode::REQUEST_ERROR:
+			_error = "Sending Gemini request failed.";
+			break;
+		case GeminiClient::ClientCode::RESPONSE_HEADER_ERROR:
+		case GeminiClient::ClientCode::RESPONSE_BODY_ERROR:
+			_error = "Receiving Gemini response failed.";
+			break;
+		case GeminiClient::ClientCode::RESPONSE_HEADER_MALFORMED:
+			_error = "The site returned a malformed Gemini response header.";
+			break;
+		default:
+			assert(false);
+			break;
+	}
+
+	_isLoaded = true;
+}
+void Page::connectAsyncCallback(std::shared_ptr<GeminiClient> client, std::weak_ptr<Page> pageWeakPtr, GeminiClient::ClientCode clientCode)
+{
+	if (pageWeakPtr.expired())
+	{
+		return;
+	}
+
+	std::shared_ptr<Page> page = pageWeakPtr.lock();
+
+	if (clientCode == GeminiClient::ClientCode::SUCCESS)
+	{
+		client->receiveResponseHeaderAsync(std::bind(&receiveResponseHeaderAsyncCallback, client, pageWeakPtr, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+	}
+	else
+	{
+		page->setError(clientCode);
+	}
+}
+
+void Page::receiveResponseHeaderAsyncCallback(std::shared_ptr<GeminiClient> client, std::weak_ptr<Page> pageWeakPtr, GeminiClient::ClientCode clientCode, StatusCode statusCode, std::string meta)
+{
+	if (pageWeakPtr.expired())
+	{
+		return;
+	}
+
+	std::shared_ptr<Page> page = pageWeakPtr.lock();
+
+	if (clientCode == GeminiClient::ClientCode::SUCCESS)
+	{
+		// TODO: do not download the whole file directly into memory!
+
+		//if (isMimeSupported(meta))
+		//{
+		//	client->receiveResponseBodyAsync(std::bind(&receiveResponseBodyAsyncCallback, pageWeakPtr, statusCode, meta, std::placeholders::_1, std::placeholders::_2));
+		//}
+		//else
+		//{
+		//	page->init(statusCode, meta, nullptr);
+		//}
+
+		client->receiveResponseBodyAsync(std::bind(&receiveResponseBodyAsyncCallback, pageWeakPtr, statusCode, meta, std::placeholders::_1, std::placeholders::_2));
+	}
+	else
+	{
+		page->setError(clientCode);
+	}
+}
+
+void Page::receiveResponseBodyAsyncCallback(std::weak_ptr<Page> pageWeakPtr, StatusCode statusCode, std::string meta, GeminiClient::ClientCode clientCode, std::shared_ptr<std::vector<char>> data)
+{
+	if (pageWeakPtr.expired())
+	{
+		return;
+	}
+
+	std::shared_ptr<Page> page = pageWeakPtr.lock();
+
+	if (clientCode == GeminiClient::ClientCode::SUCCESS)
+	{
+		page->init(statusCode, meta, data);
+	}
+	else
+	{
+		page->setError(clientCode);
 	}
 }

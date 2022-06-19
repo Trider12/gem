@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
+set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/vcpkg/scripts/buildsystems/vcpkg.cmake)
+
 set(TARGET gem)
 project(${TARGET})
 
@@ -14,17 +16,33 @@ set(DIR_ASSETS     ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 # OS specific
 # ==================================================================================================
 
-if (UNIX AND NOT APPLE AND NOT ANDROID AND NOT WEBGL)
-	set(LINUX TRUE)
+if(UNIX AND NOT ANDROID AND NOT WEBGL)
+	if(APPLE)
+		if(NOT IOS)
+			set(DARWIN TRUE)
+		endif()
+	else()
+		set(LINUX TRUE)
+	endif()
 endif()
 
-if (WIN32)
+if(WIN32)
 	set(PLATFORM windows)
+	set(ARCH x64)
 elseif(LINUX)
 	set(PLATFORM linux)
+	set(ARCH x64)
+elseif(DARWIN)
+	set(PLATFORM darwin)
+	set(ARCH x64)
+elseif(ANDROID)
+	set(PLATFORM android)
+	set(ARCH ${ANDROID_ABI})
+elseif(IOS)
+	set(PLATFORM ios)
+	set(ARCH ${ARCHS})
 endif()
 
-set(ARCH x64)
 set(DIR_EXPORT ${CMAKE_CURRENT_SOURCE_DIR}/build/${PLATFORM}/${ARCH}/${CMAKE_BUILD_TYPE})
 
 # ==================================================================================================
@@ -58,6 +76,7 @@ elseif(LINUX)
 		$<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>
 		-pthread
 	)
+
 	add_link_options(
 		-stdlib=libc++
 		-pthread

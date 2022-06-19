@@ -17,6 +17,8 @@
 
 #include <IconsFontAwesome4.h>
 
+#include <nfd.h>
+
 using namespace gem;
 
 namespace
@@ -57,7 +59,7 @@ namespace
 		tabs.resize(last);
 	}
 
-	static void drawLink(Tab &tab, const Line &line)
+	static void drawLink(std::vector<Tab> &tabs, uint32_t currentTabIndex, const GemtextLine &line)
 	{
 		static const ImU32 linkColorU32 = ImGui::GetColorU32({0.f, 100.f / 255.f, 220.f / 255.f, 1.f});
 		static const ImU32 transparentColorU32 = ImGui::GetColorU32({0.f, 0.f, 0.f, 0.f});
@@ -86,7 +88,7 @@ namespace
 
 		if (ImGui::SmallButton(start, end))
 		{
-			tab.loadNewPage(std::string(line.link), line.isAbsolute);
+			tabs[currentTabIndex].loadNewPage(line.link, line.linkHasSchema);
 		}
 
 		ImGui::PopStyleColor(4);
@@ -100,16 +102,62 @@ namespace
 			ImGui::GetWindowDrawList()->AddLine(min, max, linkColorU32, 1.0f);
 			ImGui::SetTooltip("%.*s", static_cast<int>(line.link.size()), line.link.data());
 		}
+
+		if (ImGui::BeginPopupContextItem())
+		{
+			if (ImGui::MenuItem("Open in a New Tab"))
+			{
+				Tab newTab;
+				newTab.loadNewPage(line.link, line.linkHasSchema, tabs[currentTabIndex].getCurrentPage()->getUrl());
+				tabs.insert(tabs.begin() + currentTabIndex + 1, std::move(newTab));
+			}
+
+			if (ImGui::MenuItem("Copy"))
+			{
+				ImGui::SetClipboardText(std::string(line.link.data()).c_str());
+			}
+
+			ImGui::EndPopup();
+		}
 	}
 
-	static void drawText(const Line &line)
+	static void drawText(const char *textStart, const char *textEnd)
 	{
+		// TODO: selectable text
 		ImGui::PushTextWrapPos(0.0f); // enable word wrapping
-		ImGui::TextUnformatted(line.text.data(), line.text.data() + line.text.size());
+		ImGui::TextUnformatted(textStart, textEnd);
 		ImGui::PopTextWrapPos();
 	}
 
-	static void drawBlock(const Line &line, size_t index)
+	static void drawText(std::string_view text)
+	{
+		drawText(text.data(), text.data() + text.size());
+	}
+
+	static void drawText(const GemtextLine &line)
+	{
+		drawText(line.text);
+	}
+
+	static void drawTextCentered(const char *textStart, const char *textEnd)
+	{
+		float width = ImGui::GetContentRegionAvail().x;
+		float size = ImGui::CalcTextSize(textStart, textEnd).x;
+		float indent = std::max((width - size) * 0.5f, 20.f);
+
+		ImGui::Indent(indent);
+		ImGui::PushTextWrapPos(width - indent); // enable word wrapping
+		ImGui::TextUnformatted(textStart, textEnd);
+		ImGui::PopTextWrapPos();
+		ImGui::Unindent(indent);
+	}
+
+	static void drawTextCentered(std::string_view text)
+	{
+		drawTextCentered(text.data(), text.data() + text.size());
+	}
+
+	static void drawBlock(const GemtextLine &line, size_t index)
 	{
 		const ImVec4 &blockBgColor = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
 		const char *textStart = line.text.data();
@@ -125,20 +173,20 @@ namespace
 		ImGui::PopStyleColor();
 	}
 
-	static void drawHeader(const Line &line, ImFont *font)
+	static void drawHeader(const GemtextLine &line, ImFont *font)
 	{
 		ImGui::PushFont(font);
 		drawText(line);
 		ImGui::PopFont();
 	}
 
-	static void drawList(const Line &line)
+	static void drawList(const GemtextLine &line)
 	{
 		ImGui::Bullet();
 		drawText(line);
 	}
 
-	static void drawQuote(const Line &line)
+	static void drawQuote(const GemtextLine &line)
 	{
 		const ImU32 quoteBgColor = ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
 		static const ImU32 quoteLineColor = ImGui::GetColorU32({1.f, 1.f, 1.f, 1.f});
@@ -166,43 +214,45 @@ namespace
 		splitter.Merge(drawList);
 	}
 
-	static void drawPage(Tab &tab)
+	static void drawGemtextPage(std::vector<Tab> &tabs, uint32_t currentTabIndex)
 	{
+		Tab &tab = tabs[currentTabIndex];
 		std::shared_ptr<Page> page = tab.getCurrentPage();
 
 		ImGui::PushFont(fontRegular);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0.f, 0.f});
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {0.f, 0.f});
-		ImGui::BeginChild("Page");
 
-		for (size_t i = 0; i < page->lines.size(); i++)
+		const std::vector<GemtextLine> &lines = page->getPageData<GemtextPageData>()->lines;
+
+		for (size_t i = 0; i < lines.size(); i++)
 		{
-			const Line &line = page->lines[i];
+			const GemtextLine &line = lines[i];
 
 			switch (line.type)
 			{
-				case LineType::Text:
+				case GemtextLineType::Text:
 					drawText(line);
 					break;
-				case LineType::Link:
-					drawLink(tab, line);
+				case GemtextLineType::Link:
+					drawLink(tabs, currentTabIndex, line);
 					break;
-				case LineType::Block:
+				case GemtextLineType::Block:
 					drawBlock(line, i);
 					break;
-				case LineType::Header1:
+				case GemtextLineType::Header1:
 					drawHeader(line, fontH1);
 					break;
-				case LineType::Header2:
+				case GemtextLineType::Header2:
 					drawHeader(line, fontH2);
 					break;
-				case LineType::Header3:
+				case GemtextLineType::Header3:
 					drawHeader(line, fontH3);
 					break;
-				case LineType::List:
+				case GemtextLineType::List:
 					drawList(line);
 					break;
-				case LineType::Quote:
+				case GemtextLineType::Quote:
 					drawQuote(line);
 					break;
 				default:
@@ -210,67 +260,202 @@ namespace
 			}
 		}
 
-		ImGui::EndChild();
 		ImGui::PopStyleVar(2);
 		ImGui::PopFont();
+	}
+
+	static void drawTextPage(Tab &tab)
+	{
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+		std::string_view teztData = page->getData();
+
+		drawText(teztData);
+	}
+
+	static void drawImagePage(Tab &tab)
+	{
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+		ImagePageData *imageData = page->getPageData<ImagePageData>();
+
+		ImGui::Image((void *)static_cast<intptr_t>(imageData->textureId), ImVec2(static_cast<float>(imageData->imageWidth), static_cast<float>(imageData->imageHeight)));
+	}
+
+	static void drawUnsupportedPage(Tab &tab)
+	{
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+
+		if (!page->isDownloaded())
+		{
+			// TODO: non-blocking call
+
+			char *savePath;
+			const char *filename = page->getLabel().data();
+			nfdresult_t result = NFD_SaveDialogU8(&savePath, nullptr, 0, nullptr, filename);
+
+			if (result == nfdresult_t::NFD_OKAY)
+			{
+				page->download(savePath);
+
+				NFD_FreePathU8(savePath);
+			}
+			else
+			{
+				page->download(nullptr);
+			}
+		}
+	}
+
+	static void drawErrorPage(Tab &tab, std::string_view error)
+	{
+		const ImVec2 size = ImGui::GetContentRegionAvail();
+		const float width = size.x, height = size.y;
+		const float buttonWidth = 100.f;
+		const float indent = (width + buttonWidth) * 0.5f;
+
+		ImGui::Dummy({0.f, height * 0.33f});
+		drawTextCentered(error);
+		ImGui::Spacing();
+		ImGui::Indent(indent);
+		bool buttonClicked = ImGui::Button("Retry", {buttonWidth, 0.f});
+		ImGui::Unindent(indent);
+
+		if (buttonClicked)
+		{
+			tab.loadCurrentPage();
+		}
+	}
+
+	static void drawNewTabPage()
+	{
+		// TODO: searchbar, etc
+	}
+
+	static void drawSettingsPage()
+	{
+		// TODO: default download path, link preview, themes, etc
+	}
+
+	static void drawPage(std::vector<Tab> &tabs, uint32_t currentTabIndex)
+	{
+		Tab &tab = tabs[currentTabIndex];
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+
+		ImGui::BeginChild("Page", {0.f, 0.f}, false, ImGuiWindowFlags_HorizontalScrollbar);
+
+		if (std::string_view error = page->getError(); !error.empty())
+		{
+			drawErrorPage(tab, error);
+		}
+		else
+		{
+			switch (page->getPageType())
+			{
+				case PageType::None:
+					break;
+				case PageType::Gemtext:
+					drawGemtextPage(tabs, currentTabIndex);
+					break;
+				case PageType::Text:
+					drawTextPage(tab);
+					break;
+				case PageType::Image:
+					drawImagePage(tab);
+					break;
+				case PageType::Unsupported:
+					drawUnsupportedPage(tab);
+					break;
+				case PageType::NewTab:
+					drawNewTabPage();
+					break;
+				case PageType::Settings:
+					drawSettingsPage();
+					break;
+				default:
+					assert(false);
+			}
+		}
+
+		ImGui::EndChild();
 	}
 
 	static bool drawSideMenu(App &app, UserData &userData, Tab &tab, std::vector<Tab> &tabs)
 	{
 		bool exitRequested = false;
 
+		// TODO: hotkeys
+
 		if (ImGui::BeginPopup("Menu"))
 		{
-			if (ImGui::MenuItem("New Tab", "Ctrl + T"))
+			if (ImGui::MenuItem("New Tab"/*, "Ctrl + T"*/))
 			{
 				Tab newTab;
 				newTab.loadNewPage(std::make_shared<Page>(Page::newTabPage));
 				tabs.push_back(newTab);
 			}
-			if (ImGui::MenuItem("New Window", "Ctrl + N"))
+			if (ImGui::MenuItem("New Window"/*, "Ctrl + N"*/))
 			{
 				app.newWindow();
 			}
 			ImGui::Separator();
 			if (ImGui::BeginMenu("Bookmarks"))
 			{
-				ImGui::BeginListBox("##bookmarks", {300, 0});
+				ImGui::PushFont(fontRegular);
 
-				for (const Bookmark &bookmark : userData.bookmarks)
+				std::vector<Bookmark> &bookmarks = userData.bookmarks;
+
+				if (bookmarks.size() == 0)
 				{
-					if (ImGui::MenuItem(bookmark.name.c_str()))
+					ImGui::MenuItem("Bookmarks List is Empty.", nullptr, false, false);
+				}
+				else
+				{
+					for (size_t i = 0; i < bookmarks.size(); i++)
 					{
-						tab.loadNewPage(bookmark.url);
-					}
+						const Bookmark &bookmark = bookmarks[i];
 
-					if (ImGui::IsItemHovered())
-					{
-						ImGui::BeginTooltip();
-						ImGui::TextUnformatted(bookmark.name.c_str());
-						ImGui::TextUnformatted(bookmark.url.c_str());
-						ImGui::EndTooltip();
+						if (ImGui::MenuItem(bookmark.name.c_str()))
+						{
+							tab.loadNewPage(bookmark.url, true);
+						}
+
+						if (ImGui::IsItemHovered())
+						{
+							ImGui::BeginTooltip();
+							ImGui::TextUnformatted(bookmark.name.c_str());
+							ImGui::TextUnformatted(bookmark.url.c_str());
+							ImGui::EndTooltip();
+						}
+
+						if (ImGui::BeginPopupContextItem())
+						{
+							if (ImGui::MenuItem("Remove from Bookmarks"))
+							{
+								bookmarks.erase(bookmarks.begin() + i--);
+							}
+
+							ImGui::EndPopup();
+						}
 					}
 				}
 
-				ImGui::EndListBox();
-
+				ImGui::PopFont();
 				ImGui::EndMenu();
 			}
-			if (ImGui::MenuItem("Find in Page", "Ctrl + F"))
+			if (ImGui::MenuItem("Find in Page"/*, "Ctrl + F"*/))
 			{
-				// TODO
+				// TODO: find functionality
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Settings"))
 			{
-				// TODO
+				// TODO: settings tab
 			}
 			if (ImGui::MenuItem("About"))
 			{
-				// TODO
+				// TODO: about page
 			}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Exit", "Alt + F4"))
+			if (ImGui::MenuItem("Exit"/*, "Alt + F4"*/))
 			{
 				exitRequested = true;
 			}
@@ -284,6 +469,8 @@ namespace
 	static bool drawToolbar(App &app, UserData &userData, Tab &tab, std::vector<Tab> &tabs)
 	{
 		constexpr ImVec2 toolbarButtonSize = {40.f, 0.f};
+
+		// TODO: remember page position
 
 		if (tab.hasPrevPage())
 		{
@@ -315,9 +502,27 @@ namespace
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button(ICON_FA_REPEAT, toolbarButtonSize))
+		std::shared_ptr<Page> page = tab.getCurrentPage();
+
+		if (PageType pageType = page->getPageType(); pageType == PageType::NewTab || pageType == PageType::Settings)
 		{
-			tab.loadCurrentPage();
+			ImGui::BeginDisabled();
+			ImGui::Button(ICON_FA_REPEAT, toolbarButtonSize);
+			ImGui::EndDisabled();
+		}
+		else if (page->isLoaded())
+		{
+			if (ImGui::Button(ICON_FA_REPEAT, toolbarButtonSize))
+			{
+				tab.loadCurrentPage();
+			}
+		}
+		else
+		{
+			if (ImGui::Button(ICON_FA_TIMES, toolbarButtonSize))
+			{
+				// TODO: cancellation
+			}
 		}
 		ImGui::SameLine();
 
@@ -331,7 +536,7 @@ namespace
 					url = "gemini://" + url;
 				}
 
-				tab.loadNewPage(url);
+				tab.loadNewPage(url, true);
 			}
 		}
 		ImGui::SameLine();
@@ -380,7 +585,7 @@ namespace
 			if (ImGui::MenuItem("Bookmark Tab"))
 			{
 				auto page = tab.getCurrentPage();
-				userData.bookmarks.push_back({page->label, page->url});
+				userData.bookmarks.push_back({std::string(page->getLabel()), std::string(page->getUrl())});
 			}
 			ImGui::Separator();
 
@@ -445,6 +650,7 @@ namespace
 		std::unordered_set<uint32_t> tabsToRemoveIndices;
 		bool exitRequested = false;
 
+		//TODO: increase the maximum number of displayed tabs
 		for (uint32_t i = 0; i < tabs.size(); i++)
 		{
 			if (!tabs[i].isOpen())
@@ -464,12 +670,14 @@ namespace
 
 			bool isOpen = tabs[i].isOpen();
 			std::shared_ptr<Page> page = tabs[i].getCurrentPage();
-			std::string &label = page->label.empty() ? page->url : page->label;
+			std::string_view label = page->getLabel().empty() ? page->getUrl() : page->getLabel();
 
 			ImGui::SetNextItemWidth(200);
+			ImGui::PushFont(fontRegular);
 			ImGui::PushID(i);
-			bool isTabSelected = ImGui::BeginTabItem(label.c_str(), &isOpen, tabFlags);
+			bool isTabSelected = ImGui::BeginTabItem(label.data(), &isOpen, tabFlags);
 			ImGui::PopID();
+			ImGui::PopFont();
 
 			tabs[i].setOpen(isOpen);
 
@@ -481,7 +689,7 @@ namespace
 				exitRequested = drawToolbar(app, userData, tabs[i], tabs);
 
 				// Page
-				drawPage(tabs[i]);
+				drawPage(tabs, i);
 
 				ImGui::EndTabItem();
 			}

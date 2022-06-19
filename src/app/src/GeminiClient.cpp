@@ -9,17 +9,15 @@
 #include <asio/read_until.hpp>
 #include <asio/streambuf.hpp>
 #include <asio/write.hpp>
-#include <asio/ip/tcp.hpp>
 
 using namespace gem;
 
 namespace
 {
-	static inline bool checkErrorCode(const asio::error_code &ec, [[maybe_unused]] std::string_view successMessage = "", std::string_view failMessage = "", bool eofIsError = true)
+	static inline bool checkErrorCode(const asio::error_code &ec, std::string_view failMessage = "", bool eofIsError = true)
 	{
 		if (!ec || (!eofIsError && ec == asio::error::eof))
 		{
-			//puts(successMessage.data());
 			return true;
 		}
 
@@ -29,38 +27,12 @@ namespace
 		return false;
 	}
 
-	using SocketPtr = std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>>;
-
-	static void receiveBodyAsync(SocketPtr socket, int code, const std::string &meta, const GeminiClient::CallbackType &callback)
+	static void parseHeader(std::string_view header, const GeminiClient::ResponseHeaderCallback &callback)
 	{
-		auto buffer = std::make_shared<std::string>();
-
-		// capture socket to prolong its life
-		asio::async_read(*socket, asio::dynamic_buffer(*buffer),
-			[socket, buffer, code, meta, callback](const std::error_code &ec, std::size_t)
-			{
-				if (checkErrorCode(ec, "Receiving Body successful", "Receiving Body failed", false))
-				{
-					if (callback)
-					{
-						callback(code, meta, buffer);
-					}
-				}
-				else if (callback)
-				{
-					callback(code, meta, nullptr);
-				}
-			}
-		);
-	}
-
-	static void parseHeader(SocketPtr socket, std::string_view header, const GeminiClient::CallbackType &callback)
-	{
-		int code = 5;
-		std::string meta;
-
 		if (!header.empty())
 		{
+			int code;
+			std::string meta;
 			std::from_chars_result result;
 
 			if (size_t spacePos = header.find(' '); spacePos != std::string::npos)
@@ -73,123 +45,95 @@ namespace
 				result = std::from_chars(header.data(), header.data() + header.size(), code);
 			}
 
-			assert(result.ec != std::errc::invalid_argument);
-
-			// TODO: return codes handling
-
-			switch (code)
+			if (result.ec != std::errc::invalid_argument)
 			{
-				case 20:
-					if (stringStartsWith(meta, "text/"))
-					{
-						receiveBodyAsync(socket, code, meta, callback);
+				switch (code)
+				{
+					case 10:
+					case 11:
+					case 20:
+					case 30:
+					case 31:
+					case 40:
+					case 41:
+					case 42:
+					case 43:
+					case 44:
+					case 50:
+					case 51:
+					case 52:
+					case 53:
+					case 59:
+					case 60:
+					case 61:
+					case 62:
+						callback(GeminiClient::ClientCode::SUCCESS, static_cast<StatusCode>(code), meta);
 						return;
-					}
-					break;
-				case 10:
-				case 11:
-				case 30:
-				case 31:
-				case 40:
-				case 41:
-				case 42:
-				case 43:
-				case 44:
-				case 51:
-				case 52:
-				case 53:
-				case 59:
-				case 60:
-				case 61:
-				case 62:
-					break;
-				default:
-					assert(false);
-					break;
+					default:
+						break;
+				}
 			}
 		}
 
 		fprintf(stderr, "Malformed header: \"%s\"\n", header.data());
 
-		if (callback)
-		{
-			callback(code, std::string(meta), nullptr);
-		}
+		callback(GeminiClient::ClientCode::RESPONSE_HEADER_ERROR, StatusCode::NONE, "");
 	}
 
-	static void receiveHeaderAsync(SocketPtr socket, const GeminiClient::CallbackType &callback)
-	{
-		auto buffer = std::make_shared<std::string>();
-
-		asio::async_read_until(*socket, asio::dynamic_buffer(*buffer), "\r\n",
-			[socket, buffer, callback](const std::error_code &ec, std::size_t size)
-			{
-				if (checkErrorCode(ec, "Receiving Header successful", "Receiving Header failed"))
-				{
-					parseHeader(socket, std::string_view(buffer->data(), size), callback);
-				}
-				else if (callback)
-				{
-					callback(5, "", nullptr);
-				}
-			}
-		);
-	}
-
-	static void sendRequestAsync(SocketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
+	static void sendRequestAsync(asio::ssl::stream<asio::ip::tcp::socket> *socket, const std::string &url, const GeminiClient::ConnectionCallback &callback)
 	{
 		std::string request = url + "\r\n";
 
 		asio::async_write(*socket, asio::buffer(request),
-			[socket, callback](const std::error_code &ec, std::size_t)
+			[callback](const std::error_code &ec, std::size_t)
 			{
-				if (checkErrorCode(ec, "Write successful", "Write failed"))
+				if (checkErrorCode(ec, "Request failed"))
 				{
-					receiveHeaderAsync(socket, callback);
+					callback(GeminiClient::ClientCode::SUCCESS);
 				}
-				else if (callback)
+				else
 				{
-					callback(4, "", nullptr);
+					callback(GeminiClient::ClientCode::REQUEST_ERROR);
 				}
 			}
 		);
 	}
 
-	static void handshakeAsync(SocketPtr socket, const std::string &url, const GeminiClient::CallbackType &callback)
+	static void handshakeAsync(asio::ssl::stream<asio::ip::tcp::socket> *socket, const std::string &url, const GeminiClient::ConnectionCallback &callback)
 	{
 		socket->async_handshake(asio::ssl::stream_base::client,
 			[socket, url, callback](const std::error_code &ec)
 			{
-				if (checkErrorCode(ec, "Handshake successful", "Handshake failed"))
+				if (checkErrorCode(ec, "TLS handshake failed"))
 				{
 					sendRequestAsync(socket, url, callback);
 				}
-				else if (callback)
+				else
 				{
-					callback(3, "", nullptr);
+					callback(GeminiClient::ClientCode::TLS_HANDSHAKE_ERROR);
 				}
 			}
 		);
 	}
 
-	static void connectAsync(SocketPtr socket, const std::string &url, const asio::ip::tcp::resolver::results_type &endpoints, const GeminiClient::CallbackType &callback)
+	static void connectAsync(asio::ssl::stream<asio::ip::tcp::socket> *socket, const std::string &url, const asio::ip::tcp::resolver::results_type &endpoints, const GeminiClient::ConnectionCallback &callback)
 	{
 		asio::async_connect(socket->next_layer(), endpoints,
 			[socket, url, callback](const std::error_code &ec, const asio::ip::tcp::endpoint &)
 			{
-				if (checkErrorCode(ec, "Connect successful", "Connect failed"))
+				if (checkErrorCode(ec, "Connection failed"))
 				{
 					handshakeAsync(socket, url, callback);
 				}
-				else if (callback)
+				else
 				{
-					callback(2, "", nullptr);
+					callback(GeminiClient::ClientCode::CONNECTION_ERROR);
 				}
 			}
 		);
 	}
 
-	static void resolveAsync(asio::io_context &ioContext, SocketPtr socket, const std::string &url, size_t port, const GeminiClient::CallbackType &callback)
+	static void resolveAsync(asio::io_context &ioContext, asio::ssl::stream<asio::ip::tcp::socket> *socket, const std::string &url, size_t port, const GeminiClient::ConnectionCallback &callback)
 	{
 		auto resolver = std::make_shared<asio::ip::tcp::resolver>(ioContext);
 		std::string_view hostName = extractHostName(url);
@@ -197,19 +141,19 @@ namespace
 		resolver->async_resolve(hostName, std::to_string(port),
 			[socket, url, resolver, callback](const std::error_code &ec, const asio::ip::tcp::resolver::results_type &endpoints)
 			{
-				if (checkErrorCode(ec, "Resolve successful", "Resolve failed"))
+				if (checkErrorCode(ec, "Host name resolution failed"))
 				{
 					connectAsync(socket, url, endpoints, callback);
 				}
-				else if (callback)
+				else
 				{
-					callback(1, "", nullptr);
+					callback(GeminiClient::ClientCode::HOST_NAME_RESOLUTION_ERROR);
 				}
 			}
 		);
 	}
 
-	static bool verifyCertificate(bool preverified, asio::ssl::verify_context &context)
+	static bool verifyCertificate([[maybe_unused]] bool preverified, asio::ssl::verify_context &context)
 	{
 		char name[256];
 		X509 *cert = X509_STORE_CTX_get_current_cert(context.native_handle());
@@ -236,10 +180,53 @@ namespace
 asio::io_context GeminiClient::_ioContext;
 asio::ssl::context GeminiClient::_sslContext = createSslContext();
 
-void GeminiClient::connectAsync(std::string url, size_t port /*= 1965*/, const CallbackType &callback /*= nullptr*/)
+void GeminiClient::connectAsync(const ConnectionCallback &callback, std::string url, size_t port /*= 1965*/)
 {
-	auto socket = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(_ioContext, _sslContext);
-	resolveAsync(_ioContext, socket, url, port, callback);
+	delete _socket;
+	_socket = new asio::ssl::stream<asio::ip::tcp::socket>(_ioContext, _sslContext);
+
+	resolveAsync(_ioContext, _socket, url, port, callback);
+}
+
+void GeminiClient::receiveResponseHeaderAsync(const ResponseHeaderCallback &callback)
+{
+	auto buffer = new std::string();
+
+	asio::async_read_until(*_socket, asio::dynamic_buffer(*buffer), "\r\n",
+		[buffer, callback](const std::error_code &ec, std::size_t size)
+		{
+			if (checkErrorCode(ec, "Receiving response header failed"))
+			{
+				parseHeader(std::string_view(buffer->data(), size), callback);
+			}
+			else
+			{
+				callback(ClientCode::RESPONSE_HEADER_ERROR, StatusCode::NONE, "");
+			}
+
+			delete buffer;
+		}
+	);
+}
+
+void GeminiClient::receiveResponseBodyAsync(const ResponseBodyCallback &callback)
+{
+	auto buffer = std::make_shared<std::vector<char>>();
+
+	// capture socket to prolong its life
+	asio::async_read(*_socket, asio::dynamic_buffer(*buffer),
+		[buffer, callback](const std::error_code &ec, std::size_t)
+		{
+			if (checkErrorCode(ec, "Receiving response body failed", false))
+			{
+				callback(GeminiClient::ClientCode::SUCCESS, buffer);
+			}
+			else
+			{
+				callback(GeminiClient::ClientCode::RESPONSE_BODY_ERROR, nullptr);
+			}
+		}
+	);
 }
 
 void GeminiClient::poll()

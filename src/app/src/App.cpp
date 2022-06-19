@@ -6,7 +6,10 @@
 
 #include <SDL.h>
 #include <SDL_filesystem.h>
+
 #include <imgui_impl_sdl.h>
+
+#include <nfd.h>
 
 using namespace gem;
 
@@ -29,6 +32,13 @@ App::App()
 		throw std::runtime_error(buffer);
 	}
 
+	if (NFD_Init() != NFD_OKAY) {
+		char buffer[128];
+		snprintf(buffer, sizeof(buffer), "NFD Error: %s\n", NFD_GetError());
+		fputs(buffer, stderr);
+		throw std::runtime_error(buffer);
+	}
+
 	_context.settings.load(settingsPath);
 	_context.userData.load(userDataPath);
 
@@ -42,6 +52,7 @@ App::~App()
 	_context.settings.save(settingsPath);
 	_context.userData.save(userDataPath);
 
+	NFD_Quit();
 	SDL_Quit();
 }
 

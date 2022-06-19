@@ -19,7 +19,7 @@ namespace gem
 		std::shared_ptr<Page> getCurrentPage();
 		void loadCurrentPage();
 
-		void loadNewPage(const std::string &url, bool hasSchema = true);
+		void loadNewPage(std::string_view url, bool hasSchema, std::string_view baseUrl = "");
 		void loadNewPage(std::shared_ptr<Page> page);
 
 		std::string &getAddressBarText();
