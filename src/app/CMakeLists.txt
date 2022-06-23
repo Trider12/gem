@@ -112,11 +112,22 @@ target_include_directories(${TARGET} PRIVATE
 	${FREETYPE_INCLUDE_DIRS}
 )
 
+if(WIN32)
+	target_link_libraries(${TARGET} PRIVATE
+		SDL2::SDL2
+		SDL2::SDL2main
+	)
+else()
+	target_link_libraries(${TARGET} PRIVATE
+		SDL2::SDL2-static
+		SDL2::SDL2main
+	)
+endif()
+
 target_link_libraries(${TARGET} PRIVATE
 	SSL
 	Crypto
 	${OPENGL_LIBRARIES}
-	${SDL2_LIBRARIES}
 	${FREETYPE_LIBRARIES}
 	${CMAKE_DL_LIBS}
 )
