@@ -13,8 +13,8 @@ TODO
 ### Commands
 Clone and update submodules:
 ```
-mkdir gem && cd gem
-git clone https://github.com/Trider12/gem .
+git clone https://github.com/Trider12/gem
+cd gem
 git submodule update --init
 ```
 Build third party libraries:
@@ -23,6 +23,6 @@ python3 ./tools/scripts/vcpkg_install_third_parties.py
 ```
 Build sources:
 ```
-cmake -Bbuild -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=tools/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake -Bbuild -DCMAKE_BUILD_TYPE=Release -GNinja
 cmake --build build --config Release --target all
 ```
