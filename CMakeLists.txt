@@ -63,9 +63,12 @@ if (WIN32)
 			/external:W0
 			$<$<NOT:$<CONFIG:DEBUG>>:/O2>
 		)
-		add_link_options($<$<NOT:$<CONFIG:DEBUG>>:/SUBSYSTEM:WINDOWS>)
+
+		add_link_options(
+			$<$<NOT:$<CONFIG:DEBUG>>:/SUBSYSTEM:WINDOWS>
+		)
 	endif()
-elseif(LINUX)
+else()
 	add_compile_options(
 		-Wall
 		$<$<NOT:$<CONFIG:DEBUG>>:-Werror>
@@ -73,8 +76,12 @@ elseif(LINUX)
 		-fstrict-aliasing
 		-isystem ${DIR_THIRDPARTY}
 		$<$<NOT:$<CONFIG:DEBUG>>:-O3>
+	)
+endif()
+
+if(LINUX)
+	add_compile_options(
 		$<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>
-		-pthread
 	)
 
 	add_link_options(

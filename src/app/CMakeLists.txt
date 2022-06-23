@@ -94,7 +94,7 @@ endif()
 if(LINUX)
 	find_package(PkgConfig REQUIRED) # provided by OS
 	pkg_check_modules(DBUS REQUIRED dbus-1)
-    message("Using DBUS version: ${DBUS_VERSION}")
+	message("Using DBUS version: ${DBUS_VERSION}")
 	target_compile_definitions(${TARGET} PRIVATE NFD_PORTAL)
 	target_include_directories(${TARGET} PRIVATE ${DBUS_INCLUDE_DIRS})
 	target_link_libraries(${TARGET} PRIVATE ${DBUS_LIBRARIES})
