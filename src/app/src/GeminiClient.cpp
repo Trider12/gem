@@ -170,8 +170,8 @@ namespace
 		context.set_default_verify_paths();
 		context.set_verify_mode(asio::ssl::context::verify_none);
 		context.set_verify_callback(verifyCertificate);
-		context.use_certificate_file("assets/certificates/gem.crt", asio::ssl::context_base::file_format::pem);
-		context.use_private_key_file("assets/certificates/gem.key", asio::ssl::context_base::file_format::pem);
+		//context.use_certificate_file("assets/certificates/gem.crt", asio::ssl::context_base::file_format::pem);
+		//context.use_private_key_file("assets/certificates/gem.key", asio::ssl::context_base::file_format::pem);
 
 		return context;
 	}

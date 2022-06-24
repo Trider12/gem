@@ -16,10 +16,11 @@ using namespace gem;
 
 namespace
 {
+#ifndef __ANDROID__
 	static const std::string appPath = SDL_GetPrefPath(nullptr, "gem");
 	static const std::string settingsPath = appPath + "Settings.json";
 	static const std::string userDataPath = appPath + "UserData.json";
-
+#endif
 	static uint32_t newWindowsCount = 0;
 }
 
@@ -40,10 +41,10 @@ App::App()
 		fputs(buffer, stderr);
 		throw std::runtime_error(buffer);
 	}
-#endif
 
 	_context.settings.load(settingsPath);
 	_context.userData.load(userDataPath);
+#endif
 
 	AppWindow::loadFonts();
 
@@ -52,9 +53,10 @@ App::App()
 
 App::~App()
 {
+#ifndef __ANDROID__
 	_context.settings.save(settingsPath);
 	_context.userData.save(userDataPath);
-#ifndef __ANDROID__
+
 	NFD_Quit();
 #endif
 	SDL_Quit();

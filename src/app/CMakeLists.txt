@@ -57,6 +57,12 @@ target_compile_definitions(${TARGET} PRIVATE
 	STBI_NO_STDIO
 )
 
+if(ANDROID)
+	target_compile_definitions(${TARGET} PRIVATE
+		IMGUI_IMPL_OPENGL_ES3
+	)
+endif()
+
 # ==================================================================================================
 # Includes
 # ==================================================================================================
@@ -101,7 +107,7 @@ target_include_directories(${TARGET} PRIVATE
 	${FREETYPE_INCLUDE_DIRS}
 )
 
-if(WIN32)
+if(WIN32 OR ANDROID)
 	target_link_libraries(${TARGET} PRIVATE
 		SDL2::SDL2
 		SDL2::SDL2main

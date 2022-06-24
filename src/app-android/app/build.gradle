@@ -17,7 +17,7 @@ android {
             cmake {
                 arguments "-DCMAKE_TOOLCHAIN_FILE=tools/vcpkg/scripts/buildsystems/vcpkg.cmake",
                     "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${android.ndkDirectory}/build/cmake/android.toolchain.cmake",
-                    "-DVCPKG_TARGET_TRIPLET=arm64-android"
+                    "-DVCPKG_TARGET_TRIPLET=arm64-android-custom"
             }
         }
 

@@ -8,6 +8,7 @@
 
 #include <SDL.h>
 #include <SDL_opengl.h>
+#include <SDL_rwops.h>
 
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
@@ -999,12 +1000,28 @@ void AppWindow::saveContext()
 	settings.windowResolution = {_width, _height};
 }
 
+static char *loadFont(const char *path, int &size)
+{
+	SDL_RWops *ops = SDL_RWFromFile(path, "rb");
+	size = SDL_RWsize(ops);
+	char *data = new char[size];
+	SDL_RWread(ops, data, size, 1);
+	return data;
+}
+
 void AppWindow::loadFonts()
 {
+#ifdef __ANDROID__
+	constexpr const char *fontPathRegular = "fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathMono = "fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathEmoji = "fonts/NotoEmoji-Regular.ttf";
+	constexpr const char *fontPathIcons = "fonts/fontawesome-webfont.ttf";
+#else
 	constexpr const char *fontPathRegular = "assets/fonts/NotoSansMono-Regular.ttf";
 	constexpr const char *fontPathMono = "assets/fonts/NotoSansMono-Regular.ttf";
 	constexpr const char *fontPathEmoji = "assets/fonts/NotoEmoji-Regular.ttf";
 	constexpr const char *fontPathIcons = "assets/fonts/fontawesome-webfont.ttf";
+#endif
 
 	constexpr float fontSizeInternal = 20.f;
 	constexpr float fontSizeRegular = 20.f;
@@ -1013,24 +1030,16 @@ void AppWindow::loadFonts()
 	constexpr float fontSizeH2 = 28.f;
 	constexpr float fontSizeH3 = 24.f;
 
-	assert(std::filesystem::exists(fontPathRegular));
-	assert(std::filesystem::exists(fontPathMono));
-	assert(std::filesystem::exists(fontPathEmoji));
-	assert(std::filesystem::exists(fontPathIcons));
+	//assert(std::filesystem::exists(fontPathRegular));
+	//assert(std::filesystem::exists(fontPathMono));
+	//assert(std::filesystem::exists(fontPathEmoji));
+	//assert(std::filesystem::exists(fontPathIcons));
 
-	std::ifstream ifs;
-	ifs.open(fontPathRegular, std::ios::binary | std::ios::ate);
-	int fontDataSizeRegular = static_cast<int>(ifs.tellg());
-	char *fontDataRegular = new char[fontDataSizeRegular];
-	ifs.seekg(0, std::ios::beg);
-	ifs.read(fontDataRegular, fontDataSizeRegular);
-	ifs.close();
-	ifs.open(fontPathEmoji, std::ios::binary | std::ios::ate);
-	int fontDataSizeEmoji = static_cast<int>(ifs.tellg());
-	char *fontDataEmoji = new char[fontDataSizeEmoji];
-	ifs.seekg(0, std::ios::beg);
-	ifs.read(fontDataEmoji, fontDataSizeEmoji);
-	ifs.close();
+	int fontDataSizeRegular, fontDataSizeMono, fontDataSizeEmoji, fontDataSizeIcons;
+	char *fontDataRegular = loadFont(fontPathRegular, fontDataSizeRegular);
+	char *fontDataMono = loadFont(fontPathMono, fontDataSizeMono);
+	char *fontDataEmoji = loadFont(fontPathEmoji, fontDataSizeEmoji);
+	char *fontDataIcons = loadFont(fontPathIcons, fontDataSizeIcons);
 
 	static const ImWchar fontRangesRegular[] = {0x1, 0xFFFF, 0};
 	static ImFontConfig fontConfigRegular;
@@ -1045,15 +1054,16 @@ void AppWindow::loadFonts()
 
 	static const ImWchar fontRangesIcons[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
 	static ImFontConfig fontConfigIcons;
+	fontConfigIcons.FontDataOwnedByAtlas = false;
 	fontConfigIcons.MergeMode = true;
 
 	fontInternal = fontAtlas.AddFontFromMemoryTTF(fontDataRegular, fontDataSizeRegular, fontSizeInternal, &fontConfigRegular, fontRangesRegular);
-	fontAtlas.AddFontFromFileTTF(fontPathIcons, fontSizeInternal, &fontConfigIcons, fontRangesIcons);
+	fontAtlas.AddFontFromMemoryTTF(fontDataIcons, fontDataSizeIcons, fontSizeInternal, &fontConfigIcons, fontRangesIcons);
 
 	fontRegular = fontAtlas.AddFontFromMemoryTTF(fontDataRegular, fontDataSizeRegular, fontSizeRegular, &fontConfigRegular, fontRangesRegular);
 	fontAtlas.AddFontFromMemoryTTF(fontDataEmoji, fontDataSizeEmoji, fontSizeRegular, &fontConfigEmoji, fontRangesEmoji);
 
-	fontMono = fontAtlas.AddFontFromFileTTF(fontPathMono, fontSizeMono, nullptr, fontRangesRegular);
+	fontMono = fontAtlas.AddFontFromMemoryTTF(fontDataMono, fontDataSizeMono, fontSizeMono, &fontConfigRegular, fontRangesRegular);
 	fontAtlas.AddFontFromMemoryTTF(fontDataEmoji, fontDataSizeEmoji, fontSizeMono, &fontConfigEmoji, fontRangesEmoji);
 
 	fontH1 = fontAtlas.AddFontFromMemoryTTF(fontDataRegular, fontDataSizeRegular, fontSizeH1, &fontConfigRegular, fontRangesRegular);
@@ -1068,5 +1078,7 @@ void AppWindow::loadFonts()
 	fontAtlas.Build();
 
 	delete[] fontDataRegular;
+	delete[] fontDataMono;
 	delete[] fontDataEmoji;
+	delete[] fontDataIcons;
 }
