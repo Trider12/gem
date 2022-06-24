@@ -8,8 +8,9 @@
 #include <SDL_filesystem.h>
 
 #include <imgui_impl_sdl.h>
-
+#ifndef __ANDROID__
 #include <nfd.h>
+#endif
 
 using namespace gem;
 
@@ -32,12 +33,14 @@ App::App()
 		throw std::runtime_error(buffer);
 	}
 
+#ifndef __ANDROID__
 	if (NFD_Init() != NFD_OKAY) {
 		char buffer[128];
 		snprintf(buffer, sizeof(buffer), "NFD Error: %s\n", NFD_GetError());
 		fputs(buffer, stderr);
 		throw std::runtime_error(buffer);
 	}
+#endif
 
 	_context.settings.load(settingsPath);
 	_context.userData.load(userDataPath);
@@ -51,8 +54,9 @@ App::~App()
 {
 	_context.settings.save(settingsPath);
 	_context.userData.save(userDataPath);
-
+#ifndef __ANDROID__
 	NFD_Quit();
+#endif
 	SDL_Quit();
 }
 

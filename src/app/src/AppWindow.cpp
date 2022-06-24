@@ -16,8 +16,9 @@
 #include <imgui_freetype.h>
 
 #include <IconsFontAwesome4.h>
-
+#ifndef __ANDROID__
 #include <nfd.h>
+#endif
 
 using namespace gem;
 
@@ -286,6 +287,7 @@ namespace
 
 		if (!page->isDownloaded())
 		{
+#ifndef __ANDROID__
 			// TODO: non-blocking call
 
 			char *savePath;
@@ -302,6 +304,7 @@ namespace
 			{
 				page->download(nullptr);
 			}
+#endif
 		}
 	}
 

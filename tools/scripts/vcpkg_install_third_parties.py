@@ -12,10 +12,10 @@ def run(cmd):
 
 if os.name == 'nt':
     run("bootstrap-vcpkg.bat")
-    run("vcpkg.exe install --triplet x64-windows sdl2 freetype")
+    run("vcpkg.exe install --triplet x64-windows sdl2 freetype openssl")
 else:
     run("./bootstrap-vcpkg.sh")
     if os.environ.get('DISPLAY'): # X11
-    	run("./vcpkg install sdl2 sdl2[x11] freetype")
+        run("./vcpkg install sdl2 sdl2[x11] freetype openssl")
     else:
-    	run("./vcpkg install sdl2 freetype")
+        run("./vcpkg install sdl2 freetype openssl")

@@ -29,11 +29,19 @@ endif()
 # Target
 # ================================================================================================== 
 
-add_executable(${TARGET} ${SOURCES})
+if(ANDROID)
+	add_library(${TARGET} SHARED ${SOURCES})
 
-set_target_properties(${TARGET} PROPERTIES
-	RUNTIME_OUTPUT_DIRECTORY ${DIR_EXPORT}
-)
+	set_target_properties(${TARGET} PROPERTIES
+		LIBRARY_OUTPUT_DIRECTORY ${DIR_EXPORT}
+	)
+else()
+	add_executable(${TARGET} ${SOURCES})
+
+	set_target_properties(${TARGET} PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY ${DIR_EXPORT}
+	)
+endif()
 
 # ==================================================================================================
 # Preprocessor
@@ -71,26 +79,6 @@ target_include_directories(${TARGET} PRIVATE
 # Libraries
 # ==================================================================================================
 
-add_library(SSL STATIC IMPORTED)
-add_library(Crypto STATIC IMPORTED)
-
-if(WIN32)
-	set_target_properties(SSL PROPERTIES
-		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libssl.lib
-	)
-	set_target_properties(Crypto PROPERTIES
-		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libcrypto.lib
-	)
-	target_link_libraries(${TARGET} PRIVATE crypt32.lib) # provided by OS
-else()
-	set_target_properties(SSL PROPERTIES
-		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libssl.a
-	)
-	set_target_properties(Crypto PROPERTIES
-		IMPORTED_LOCATION ${DIR_THIRDPARTY}/openssl/lib/${PLATFORM}/${ARCH}/libcrypto.a
-	)
-endif()
-
 if(LINUX)
 	find_package(PkgConfig REQUIRED) # provided by OS
 	pkg_check_modules(DBUS REQUIRED dbus-1)
@@ -103,11 +91,12 @@ elseif(DARWIN)
 	target_link_libraries(${TARGET} PRIVATE ${APPKIT_LIBRARY})
 endif()
 
-find_package(OpenGL REQUIRED) # provided by OS
+find_package(OpenSSL REQUIRED) # provided by vcpkg
 find_package(SDL2 REQUIRED) # provided by vcpkg
 find_package(Freetype REQUIRED) # provided by vcpkg
 
 target_include_directories(${TARGET} PRIVATE
+	${OPENSSL_INCLUDE_DIR}
 	${SDL2_INCLUDE_DIRS}
 	${FREETYPE_INCLUDE_DIRS}
 )
@@ -124,10 +113,20 @@ else()
 	)
 endif()
 
+if(ANDROID)
+	target_link_libraries(${TARGET} PRIVATE
+		EGL
+		GLESv3
+	)
+else()
+	find_package(OpenGL REQUIRED) # provided by OS
+	target_link_libraries(${TARGET} PRIVATE
+		${OPENGL_LIBRARIES}
+	)
+endif()
+
 target_link_libraries(${TARGET} PRIVATE
-	SSL
-	Crypto
-	${OPENGL_LIBRARIES}
+	${OPENSSL_LIBRARIES}
 	${FREETYPE_LIBRARIES}
 	${CMAKE_DL_LIBS}
 )
