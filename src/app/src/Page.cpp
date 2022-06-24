@@ -159,6 +159,7 @@ void Page::init(StatusCode code, std::string meta, std::shared_ptr<std::vector<c
 	_isLoaded = true;
 
 	clearPageData(_pageType, _pageData);
+	_error.clear();
 
 	if (_code == StatusCode::SUCCESS)
 	{
