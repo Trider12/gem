@@ -42,6 +42,8 @@ App::App()
 		throw std::runtime_error(buffer);
 	}
 
+	printf("App directory: \"%s\"\n", appPath.c_str());
+
 	_context.settings.load(settingsPath);
 	_context.userData.load(userDataPath);
 #endif
