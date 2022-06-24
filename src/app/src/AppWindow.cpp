@@ -7,11 +7,16 @@
 #include <unordered_set>
 
 #include <SDL.h>
-#include <SDL_opengl.h>
 
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
+#ifdef GEM_SDLRENDERER
+#include <imgui_impl_sdlrenderer.h>
+#else
+#include <SDL_opengl.h>
 #include <imgui_impl_opengl3.h>
+#endif
+
 #include <imgui_stdlib.h>
 #include <imgui_freetype.h>
 
@@ -805,6 +810,9 @@ AppWindow::AppWindow(App *app, AppContext *context) :
 	_displayIndex = settings.displayIndex;
 	_isMaximized = settings.displayMode == DisplayMode::Maximized;
 
+#ifdef GEM_SDLRENDERER
+	static constexpr SDL_WindowFlags windowFlags = SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+#else
 	// GL 3.0 + GLSL 130
 	static constexpr const char *glslVersion = "#version 130";
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
@@ -816,6 +824,7 @@ AppWindow::AppWindow(App *app, AppContext *context) :
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
 	static constexpr SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 
 	_window = SDL_CreateWindow("gem", SDL_WINDOWPOS_CENTERED_DISPLAY(_displayIndex), SDL_WINDOWPOS_CENTERED_DISPLAY(_displayIndex), _width, _height, windowFlags);
 
@@ -834,20 +843,28 @@ AppWindow::AppWindow(App *app, AppContext *context) :
 	}
 
 	_windowId = SDL_GetWindowID(_window);
-	_glContext = SDL_GL_CreateContext(_window);
 
+#ifdef GEM_SDLRENDERER
+	_renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+#else
+	_glContext = SDL_GL_CreateContext(_window);
 	SDL_GL_MakeCurrent(_window, _glContext);
 	SDL_GL_SetSwapInterval(1); // Enable vsync
+#endif
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	_imguiContext = ImGui::CreateContext(&fontAtlas);
 	ImGui::SetCurrentContext(_imguiContext);
+	ImGui::GetIO().IniFilename = nullptr;
 
+#ifdef GEM_SDLRENDERER
+	ImGui_ImplSDL2_InitForSDLRenderer(_window, _renderer);
+	ImGui_ImplSDLRenderer_Init(_renderer);
+#else
 	ImGui_ImplSDL2_InitForOpenGL(_window, _glContext);
 	ImGui_ImplOpenGL3_Init(glslVersion);
-
-	ImGui::GetIO().IniFilename = nullptr;
+#endif
 
 	setDefaultStyles();
 	setThemeDeepDark();
@@ -870,12 +887,21 @@ AppWindow::~AppWindow()
 	if (_imguiContext != nullptr)
 	{
 		ImGui::SetCurrentContext(_imguiContext);
+#ifdef GEM_SDLRENDERER
+		ImGui_ImplSDLRenderer_Shutdown();
+		ImGui_ImplSDL2_Shutdown();
+#else
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplSDL2_Shutdown();
+#endif
 		ImGui::DestroyContext();
 	}
 
+#ifdef GEM_SDLRENDERER
+	SDL_DestroyRenderer(_renderer);
+#else
 	SDL_GL_DeleteContext(_glContext);
+#endif
 	SDL_DestroyWindow(_window);
 }
 
@@ -888,7 +914,6 @@ AppWindow &AppWindow::operator=(AppWindow &&other)
 		_tabs = std::move(other._tabs);
 		_window = other._window;
 		_windowId = other._windowId;
-		_glContext = other._glContext;
 		_imguiContext = other._imguiContext;
 		_positionX = other._positionX;
 		_positionY = other._positionY;
@@ -901,8 +926,15 @@ AppWindow &AppWindow::operator=(AppWindow &&other)
 		other._app = nullptr;
 		other._appContext = nullptr;
 		other._window = nullptr;
-		other._glContext = nullptr;
 		other._imguiContext = nullptr;
+
+#ifdef GEM_SDLRENDERER
+		_renderer = other._renderer;
+		other._renderer = nullptr;
+#else
+		_glContext = other._glContext;
+		other._glContext = nullptr;
+#endif
 	}
 
 	return *this;
@@ -957,10 +989,16 @@ void AppWindow::update()
 
 void AppWindow::render()
 {
+#ifdef GEM_SDLRENDERER
+	ImGui::SetCurrentContext(_imguiContext);
+	ImGui_ImplSDLRenderer_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+#else
 	SDL_GL_MakeCurrent(_window, _glContext);
 	ImGui::SetCurrentContext(_imguiContext);
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplSDL2_NewFrame();
+#endif
 	ImGui::NewFrame();
 
 	if (drawAppWindow(*_app, _appContext->userData, _tabs, _forceSelectedTabIndex))
@@ -971,11 +1009,18 @@ void AppWindow::render()
 	//ImGui::ShowDemoWindow();
 
 	ImGui::Render();
+#ifdef GEM_SDLRENDERER
+	SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 0);
+	SDL_RenderClear(_renderer);
+	ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
+	SDL_RenderPresent(_renderer);
+#else
 	glViewport(0, 0, _width, _height);
 	glClearColor(0.f, 0.f, 0.f, 0.f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	SDL_GL_SwapWindow(_window);
+#endif
 }
 
 void AppWindow::saveContext()
