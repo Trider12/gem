@@ -6,6 +6,10 @@
 
 #include <SDL_events.h>
 
+// TODO: fix multiple windows with SDL_renderer
+#ifdef GEM_SDLRENDERER
+struct SDL_Renderer;
+#endif
 struct SDL_Window;
 struct ImGuiContext;
 
@@ -39,9 +43,14 @@ namespace gem
 		std::vector<Tab> _tabs;
 		int32_t _forceSelectedTabIndex = -1;
 
+#ifdef GEM_SDLRENDERER
+		SDL_Renderer *_renderer;
+#else
+		void *_glContext {nullptr};
+#endif
+
 		SDL_Window *_window {nullptr};
 		uint32_t _windowId {0};
-		void *_glContext {nullptr};
 		ImGuiContext *_imguiContext {nullptr};
 
 		int32_t _positionX {0};

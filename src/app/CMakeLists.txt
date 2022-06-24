@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.15)
 set(TARGET app)
 project(${TARGET})
 
+set(USE_SDLRENDERER TRUE)
+
 # ==================================================================================================
 # Sources
 # ==================================================================================================
@@ -10,12 +12,17 @@ project(${TARGET})
 file(GLOB SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${DIR_THIRDPARTY}/imgui/*.cpp
-	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_opengl3.cpp
 	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdl.cpp
 	${DIR_THIRDPARTY}/imgui/misc/cpp/imgui_stdlib.cpp
 	${DIR_THIRDPARTY}/imgui/misc/freetype/imgui_freetype.cpp
 	${DIR_THIRDPARTY}/stb/stb_image.c
 )
+
+if(USE_SDLRENDERER)
+	list(APPEND SOURCES ${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdlrenderer.cpp)
+else()
+	list(APPEND SOURCES ${DIR_THIRDPARTY}/imgui/backends/imgui_impl_opengl3.cpp)
+endif()
 
 if(WIN32)
 	list(APPEND SOURCES ${DIR_THIRDPARTY}/nativefiledialog-extended/src/nfd_win.cpp)
@@ -60,6 +67,12 @@ target_compile_definitions(${TARGET} PRIVATE
 if(ANDROID)
 	target_compile_definitions(${TARGET} PRIVATE
 		IMGUI_IMPL_OPENGL_ES3
+	)
+endif()
+
+if(USE_SDLRENDERER)
+	target_compile_definitions(${TARGET} PRIVATE
+		GEM_SDLRENDERER
 	)
 endif()
 
