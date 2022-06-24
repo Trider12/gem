@@ -8,6 +8,7 @@
 
 #include <SDL.h>
 #include <SDL_rwops.h>
+#include <SDL_keyboard.h>
 
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
@@ -477,7 +478,7 @@ namespace
 
 	static bool drawToolbar(App &app, UserData &userData, Tab &tab, std::vector<Tab> &tabs)
 	{
-		constexpr ImVec2 toolbarButtonSize = {40.f, 0.f};
+		const ImVec2 toolbarButtonSize = {ImGui::GetFontSize() * 2, 0.f};
 
 		// TODO: remember page position
 
@@ -535,7 +536,7 @@ namespace
 		}
 		ImGui::SameLine();
 
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - toolbarButtonSize.x - ImGui::GetStyle().FramePadding.x);
 		if (ImGui::InputTextWithHint("", "Enter address", &tab.getAddressBarText(), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue))
 		{
 			if (std::string &url = tab.getAddressBarText(); !url.empty())
@@ -989,6 +990,11 @@ void AppWindow::update()
 	{
 		_isVisible = false;
 	}
+
+	if (ImGui::GetIO().WantTextInput)
+	{
+		SDL_StartTextInput();
+	}
 }
 
 void AppWindow::render()
@@ -1057,23 +1063,24 @@ static char *loadFont(const char *path, int &size)
 void AppWindow::loadFonts()
 {
 #ifdef __ANDROID__
-	constexpr const char *fontPathRegular = "fonts/NotoSansMono-Regular.ttf";
-	constexpr const char *fontPathMono = "fonts/NotoSansMono-Regular.ttf";
-	constexpr const char *fontPathEmoji = "fonts/NotoEmoji-Regular.ttf";
-	constexpr const char *fontPathIcons = "fonts/fontawesome-webfont.ttf";
+#define PATH_PREFIX
+	constexpr float fontScaleFactor = 2.f;
 #else
-	constexpr const char *fontPathRegular = "assets/fonts/NotoSansMono-Regular.ttf";
-	constexpr const char *fontPathMono = "assets/fonts/NotoSansMono-Regular.ttf";
-	constexpr const char *fontPathEmoji = "assets/fonts/NotoEmoji-Regular.ttf";
-	constexpr const char *fontPathIcons = "assets/fonts/fontawesome-webfont.ttf";
+#define PATH_PREFIX "assets/"
+	constexpr float fontScaleFactor = 1.f;
 #endif
 
-	constexpr float fontSizeInternal = 20.f;
-	constexpr float fontSizeRegular = 20.f;
+	constexpr const char *fontPathRegular = PATH_PREFIX "fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathMono = PATH_PREFIX "fonts/NotoSansMono-Regular.ttf";
+	constexpr const char *fontPathEmoji = PATH_PREFIX "fonts/NotoEmoji-Regular.ttf";
+	constexpr const char *fontPathIcons = PATH_PREFIX "fonts/fontawesome-webfont.ttf";
+
+	constexpr float fontSizeInternal = 20.f * fontScaleFactor;
+	constexpr float fontSizeRegular = 20.f * fontScaleFactor;
 	constexpr float fontSizeMono = fontSizeRegular;
-	constexpr float fontSizeH1 = 32.f;
-	constexpr float fontSizeH2 = 28.f;
-	constexpr float fontSizeH3 = 24.f;
+	constexpr float fontSizeH1 = 32.f * fontScaleFactor;
+	constexpr float fontSizeH2 = 28.f * fontScaleFactor;
+	constexpr float fontSizeH3 = 24.f * fontScaleFactor;
 
 	//assert(std::filesystem::exists(fontPathRegular));
 	//assert(std::filesystem::exists(fontPathMono));
