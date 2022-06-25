@@ -93,6 +93,7 @@ namespace
 		ImGui::PushStyleColor(ImGuiCol_Button, transparentColorU32);
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, transparentColorU32);
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, transparentColorU32);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.f);
 
 		if (ImGui::SmallButton(start, end))
 		{
@@ -100,6 +101,7 @@ namespace
 		}
 
 		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
 
 		if (ImGui::IsItemHovered())
 		{
@@ -791,6 +793,7 @@ namespace
 		style.WindowBorderSize = 0.f;
 		style.WindowRounding = 0.f;
 		style.ChildRounding = 0.f;
+		style.FrameBorderSize = 1.f;
 		style.FrameRounding = 4.f;
 		style.PopupRounding = 4.f;
 		style.TabRounding = 4.f;
@@ -873,6 +876,7 @@ AppWindow::AppWindow(App *app, AppContext *context) :
 
 	setDefaultStyles();
 	setThemeDeepDark();
+	//ImGui::StyleColorsLight();
 
 	_isVisible = true;
 	SDL_ShowWindow(_window);
