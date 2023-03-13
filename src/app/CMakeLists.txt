@@ -11,7 +11,7 @@ file(GLOB SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${DIR_THIRDPARTY}/imgui/*.cpp
 	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_opengl3.cpp
-	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdl.cpp
+	${DIR_THIRDPARTY}/imgui/backends/imgui_impl_sdl2.cpp
 	${DIR_THIRDPARTY}/imgui/misc/cpp/imgui_stdlib.cpp
 	${DIR_THIRDPARTY}/imgui/misc/freetype/imgui_freetype.cpp
 	${DIR_THIRDPARTY}/stb/stb_image.c
