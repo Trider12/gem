@@ -1,7 +1,13 @@
 # gem (WIP)
 
-## Description
-TODO
+**gem** is a cross-platform browser for the [Gemini protocol](https://en.wikipedia.org/wiki/Gemini_(protocol)).
+
+Platforms: Windows, Linux (X11), MacOS, Android (WIP)
+
+Example URLs (***don't work*** in a "normal" web browser):
+* gemini://gemini.circumlunar.space/
+* gemini://geminispace.info/
+* gemini://warmedal.se/~antenna/
 
 ## Compilation
 ### Requirements:
@@ -10,7 +16,7 @@ TODO
 * [`Python 3.x`](https://www.python.org/downloads/)
 * Compiler supporting `C++17` or higher
 
-### Commands
+### Commands:
 Clone and update submodules:
 ```
 git clone https://github.com/Trider12/gem
